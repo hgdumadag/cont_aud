@@ -1,11 +1,11 @@
-{% extends "base.html" %}
+ï»¿{% extends "base.html" %}
 {% block title %}Exception detail | Continuous Auditing Pilot{% endblock %}
 {% block content %}
 <section class="panel two-column">
     <article class="card">
         <div class="section-header">
             <div>
-                <p class="eyebrow">{{ exception.entity }} · {{ exception.severity }}</p>
+                <p class="eyebrow">{{ exception.entity }} | {{ exception.severity }}</p>
                 <h2>{{ exception.title }}</h2>
             </div>
             <span class="pill">{{ exception.get_status_display }}</span>

@@ -211,6 +211,11 @@ class UploadFlowTests(TestCase):
         self.assertEqual(export_response.status_code, 200)
         workbook = load_workbook(BytesIO(export_response.content))
         self.assertEqual(workbook.sheetnames, ['Run Summary', 'DQ Report', 'New Exceptions', 'Open Exceptions', 'Closed This Period'])
+        detail_response = self.client.get(reverse('auditpilot:run_detail', args=[run.id]))
+        self.assertEqual(detail_response.status_code, 200)
+        first_exception = run.exceptions.first()
+        exception_response = self.client.get(reverse('auditpilot:exception_detail', args=[first_exception.exception_id]))
+        self.assertEqual(exception_response.status_code, 200)
 
     @override_settings(MEDIA_ROOT=tempfile.gettempdir())
     def test_missing_required_column_fails_dq_gate(self):

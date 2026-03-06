@@ -1,4 +1,4 @@
-{% extends "base.html" %}
+ï»¿{% extends "base.html" %}
 {% block title %}Run {{ run.id }} | Continuous Auditing Pilot{% endblock %}
 {% block content %}
 <section class="card-grid metrics-grid">
@@ -62,7 +62,7 @@
             {% for exception in exceptions %}
                 <a class="list-item" href="{% url 'auditpilot:exception_detail' exception.exception_id %}">
                     <strong>{{ exception.title }}</strong>
-                    <span>{{ exception.entity }} · {{ exception.severity }} · {{ exception.status }}</span>
+                    <span>{{ exception.entity }} | {{ exception.severity }} | {{ exception.status }}</span>
                     <p>{{ exception.detail|truncatechars:160 }}</p>
                 </a>
             {% empty %}
