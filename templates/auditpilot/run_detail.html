@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+{% block title %}Run {{ run.id }} | Continuous Auditing Pilot{% endblock %}
+{% block content %}
+<section class="card-grid metrics-grid">
+    <article class="metric-card accent-teal"><span>Status</span><strong>{{ run.get_status_display }}</strong></article>
+    <article class="metric-card accent-orange"><span>Rows</span><strong>{{ run.total_rows }}</strong></article>
+    <article class="metric-card accent-slate"><span>Exceptions</span><strong>{{ run.total_exceptions }}</strong></article>
+    <article class="metric-card accent-gold"><span>Warnings</span><strong>{{ run.total_warnings }}</strong></article>
+</section>
+
+<section class="card">
+    <div class="section-header">
+        <div>
+            <h2>Run {{ run.id }}</h2>
+            <p>{{ run.overall_message }}</p>
+        </div>
+        <a class="button primary" href="{% url 'auditpilot:export_run_pack' run.id %}">Export weekly pack</a>
+    </div>
+    <div class="meta-grid">
+        <div><span>Source file</span><strong>{{ run.source_file.original_name }}</strong></div>
+        <div><span>SHA-256</span><strong>{{ run.source_file.sha256 }}</strong></div>
+        <div><span>As of label</span><strong>{{ run.as_of_label|default:"-" }}</strong></div>
+        <div><span>Uploaded by</span><strong>{{ run.uploaded_by|default:"-" }}</strong></div>
+    </div>
+</section>
+
+<section class="panel two-column">
+    <article class="card">
+        <h2>Sheet results</h2>
+        <div class="table-wrap compact">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Sheet</th>
+                        <th>Status</th>
+                        <th>Rows</th>
+                        <th>Normalized</th>
+                        <th>Base</th>
+                        <th>Derived</th>
+                        <th>Schema</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for sheet_run in run.sheet_runs.all %}
+                        <tr>
+                            <td>{{ sheet_run.sheet_name }}</td>
+                            <td><span class="pill">{{ sheet_run.get_status_display }}</span></td>
+                            <td>{{ sheet_run.row_count }}</td>
+                            <td>{{ sheet_run.normalized_row_count }}</td>
+                            <td>{{ sheet_run.base_transaction_count }}</td>
+                            <td>{{ sheet_run.derived_row_count }}</td>
+                            <td>{{ sheet_run.schema_version|default:"-" }}</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </article>
+    <article class="card">
+        <h2>Recent exceptions</h2>
+        <div class="list-stack">
+            {% for exception in exceptions %}
+                <a class="list-item" href="{% url 'auditpilot:exception_detail' exception.exception_id %}">
+                    <strong>{{ exception.title }}</strong>
+                    <span>{{ exception.entity }} · {{ exception.severity }} · {{ exception.status }}</span>
+                    <p>{{ exception.detail|truncatechars:160 }}</p>
+                </a>
+            {% empty %}
+                <p class="empty-state">No exceptions for this run.</p>
+            {% endfor %}
+        </div>
+    </article>
+</section>
+
+<section class="card">
+    <h2>Data quality report</h2>
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th>Sheet</th>
+                    <th>Severity</th>
+                    <th>Code</th>
+                    <th>Message</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for finding in dq_findings %}
+                    <tr>
+                        <td>{{ finding.sheet_run.sheet_name }}</td>
+                        <td>{{ finding.severity }}</td>
+                        <td>{{ finding.code }}</td>
+                        <td>{{ finding.message }}</td>
+                    </tr>
+                {% empty %}
+                    <tr><td colspan="4" class="empty-state">No data-quality findings.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+{% endblock %}

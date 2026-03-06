@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block title %}Exceptions | Continuous Auditing Pilot{% endblock %}
+{% block content %}
+<section class="card">
+    <div class="section-header">
+        <h2>Exception register</h2>
+        <form method="get" class="filter-row">
+            <select name="status">
+                <option value="">All statuses</option>
+                {% for key, label in statuses %}
+                    <option value="{{ key }}" {% if status == key %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+            </select>
+            <select name="entity">
+                <option value="">All entities</option>
+                {% for option in entities %}
+                    <option value="{{ option }}" {% if entity == option %}selected{% endif %}>{{ option }}</option>
+                {% endfor %}
+            </select>
+            <select name="severity">
+                <option value="">All severities</option>
+                {% for key, label in severities %}
+                    <option value="{{ key }}" {% if severity == key %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+            </select>
+            <select name="run">
+                <option value="">All runs</option>
+                {% for run in runs %}
+                    <option value="{{ run.id }}" {% if run_id == run.id|stringformat:'s' %}selected{% endif %}>Run {{ run.id }}</option>
+                {% endfor %}
+            </select>
+            <button class="button ghost" type="submit">Filter</button>
+        </form>
+    </div>
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th>Exception</th>
+                    <th>Entity</th>
+                    <th>Severity</th>
+                    <th>Status</th>
+                    <th>Disposition</th>
+                    <th>Owner</th>
+                    <th>Run</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for exception in exceptions %}
+                    <tr>
+                        <td><a href="{% url 'auditpilot:exception_detail' exception.exception_id %}">{{ exception.title }}</a><br><small>{{ exception.detail|truncatechars:120 }}</small></td>
+                        <td>{{ exception.entity }}</td>
+                        <td>{{ exception.severity }}</td>
+                        <td>{{ exception.get_status_display }}</td>
+                        <td>{{ exception.get_disposition_display }}</td>
+                        <td>{{ exception.owner_name|default:"-" }}</td>
+                        <td><a href="{% url 'auditpilot:run_detail' exception.run.id %}">Run {{ exception.run.id }}</a></td>
+                    </tr>
+                {% empty %}
+                    <tr><td colspan="7" class="empty-state">No exceptions matched the current filter.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+{% endblock %}

@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}Upload Run | Continuous Auditing Pilot{% endblock %}
+{% block content %}
+<section class="card narrow-card">
+    <div class="section-header">
+        <h2>Upload weekly workbook</h2>
+        <p>Manual intake for the local pilot. The app will archive the file, validate the schema, and execute the starter control library.</p>
+    </div>
+    <form method="post" enctype="multipart/form-data" class="form-grid">
+        {% csrf_token %}
+        {{ form.non_field_errors }}
+        {% for field in form %}
+            <label class="field-block">
+                <span>{{ field.label }}</span>
+                {{ field }}
+                {% if field.help_text %}<small>{{ field.help_text }}</small>{% endif %}
+                {{ field.errors }}
+            </label>
+        {% endfor %}
+        <button class="button primary" type="submit">Process workbook</button>
+    </form>
+</section>
+{% endblock %}

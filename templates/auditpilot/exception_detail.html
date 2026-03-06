@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}Exception detail | Continuous Auditing Pilot{% endblock %}
+{% block content %}
+<section class="panel two-column">
+    <article class="card">
+        <div class="section-header">
+            <div>
+                <p class="eyebrow">{{ exception.entity }} · {{ exception.severity }}</p>
+                <h2>{{ exception.title }}</h2>
+            </div>
+            <span class="pill">{{ exception.get_status_display }}</span>
+        </div>
+        <p>{{ exception.detail }}</p>
+        <div class="meta-grid">
+            <div><span>Run</span><strong><a href="{% url 'auditpilot:run_detail' exception.run.id %}">Run {{ exception.run.id }}</a></strong></div>
+            <div><span>Control</span><strong>{{ exception.control.control_id|default:"-" }}</strong></div>
+            <div><span>Fingerprint</span><strong>{{ exception.record_fingerprint }}</strong></div>
+            <div><span>Opened</span><strong>{{ exception.opened_at|date:"Y-m-d H:i" }}</strong></div>
+        </div>
+    </article>
+    <article class="card">
+        <h2>Update exception</h2>
+        <form method="post" class="form-grid">
+            {% csrf_token %}
+            {% for field in form %}
+                <label class="field-block">
+                    <span>{{ field.label }}</span>
+                    {{ field }}
+                    {{ field.errors }}
+                </label>
+            {% endfor %}
+            <button class="button primary" type="submit">Save changes</button>
+        </form>
+    </article>
+</section>
+{% endblock %}

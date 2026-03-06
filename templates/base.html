@@ -1,0 +1,37 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}Continuous Auditing Pilot{% endblock %}</title>
+    <link rel="stylesheet" href="{% static 'css/app.css' %}">
+</head>
+<body>
+    <div class="page-shell">
+        <header class="hero">
+            <div>
+                <p class="eyebrow">Continuous Auditing Pilot</p>
+                <h1>Weekly exception monitoring for SOC and JGS</h1>
+                <p class="hero-copy">Ingest the workbook, gate schema quality, normalize transactions, execute starter controls, and track remediation from one local pilot.</p>
+            </div>
+            <nav class="nav-links">
+                <a href="{% url 'auditpilot:dashboard' %}">Dashboard</a>
+                <a href="{% url 'auditpilot:upload_run' %}">Upload Run</a>
+                <a href="{% url 'auditpilot:exception_list' %}">Exceptions</a>
+                <a href="{% url 'auditpilot:control_catalog' %}">Control Catalog</a>
+            </nav>
+        </header>
+        {% if messages %}
+            <section class="messages">
+                {% for message in messages %}
+                    <div class="message {{ message.tags }}">{{ message }}</div>
+                {% endfor %}
+            </section>
+        {% endif %}
+        <main>
+            {% block content %}{% endblock %}
+        </main>
+    </div>
+</body>
+</html>

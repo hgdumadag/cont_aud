@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+{% block title %}Dashboard | Continuous Auditing Pilot{% endblock %}
+{% block content %}
+<section class="card-grid metrics-grid">
+    <article class="metric-card accent-teal">
+        <span>Open exceptions</span>
+        <strong>{{ exception_counts.open }}</strong>
+    </article>
+    <article class="metric-card accent-orange">
+        <span>High / critical</span>
+        <strong>{{ exception_counts.high_or_critical }}</strong>
+    </article>
+    <article class="metric-card accent-slate">
+        <span>Total runs</span>
+        <strong>{{ exception_counts.total_runs }}</strong>
+    </article>
+    <article class="metric-card accent-gold">
+        <span>DQ warnings</span>
+        <strong>{{ exception_counts.dq_warnings }}</strong>
+    </article>
+</section>
+
+<section class="panel two-column">
+    <article class="card">
+        <div class="section-header">
+            <h2>Exception trend</h2>
+            <a class="button ghost" href="{% url 'auditpilot:upload_run' %}">Upload new run</a>
+        </div>
+        <div class="spark-list">
+            {% for point in run_series %}
+                <div class="spark-row">
+                    <span>{{ point.label }}</span>
+                    <div class="bar-track"><div class="bar-fill" style="width: {{ point.width }}%"></div></div>
+                    <strong>{{ point.exceptions }}</strong>
+                </div>
+            {% empty %}
+                <p class="empty-state">No runs yet. Upload a workbook to initialize the pilot.</p>
+            {% endfor %}
+        </div>
+    </article>
+    <article class="card">
+        <h2>Open exceptions by entity</h2>
+        <div class="spark-list">
+            {% for row in entity_counts %}
+                <div class="spark-row">
+                    <span>{{ row.entity }}</span>
+                    <div class="bar-track warm"><div class="bar-fill" style="width: {{ row.width }}%"></div></div>
+                    <strong>{{ row.count }}</strong>
+                </div>
+            {% empty %}
+                <p class="empty-state">No open exceptions yet.</p>
+            {% endfor %}
+        </div>
+    </article>
+</section>
+
+<section class="card">
+    <div class="section-header">
+        <h2>Recent runs</h2>
+    </div>
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th>Run</th>
+                    <th>Status</th>
+                    <th>As of</th>
+                    <th>Rows</th>
+                    <th>Exceptions</th>
+                    <th>Warnings</th>
+                    <th>Started</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for run in recent_runs %}
+                    <tr>
+                        <td><a href="{% url 'auditpilot:run_detail' run.id %}">Run {{ run.id }}</a></td>
+                        <td><span class="pill">{{ run.get_status_display }}</span></td>
+                        <td>{{ run.as_of_label|default:"-" }}</td>
+                        <td>{{ run.total_rows }}</td>
+                        <td>{{ run.total_exceptions }}</td>
+                        <td>{{ run.total_warnings }}</td>
+                        <td>{{ run.started_at|date:"Y-m-d H:i" }}</td>
+                    </tr>
+                {% empty %}
+                    <tr><td colspan="7" class="empty-state">No runs available.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+{% endblock %}

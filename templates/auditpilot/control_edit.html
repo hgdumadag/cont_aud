@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}Edit {{ control.control_id }} | Continuous Auditing Pilot{% endblock %}
+{% block content %}
+<section class="card narrow-card">
+    <div class="section-header">
+        <div>
+            <p class="eyebrow">{{ control.control_id }}</p>
+            <h2>Edit control</h2>
+        </div>
+    </div>
+    <form method="post" class="form-grid">
+        {% csrf_token %}
+        {% for field in form %}
+            <label class="field-block">
+                <span>{{ field.label }}</span>
+                {{ field }}
+                {{ field.errors }}
+            </label>
+        {% endfor %}
+        <button class="button primary" type="submit">Save control</button>
+    </form>
+</section>
+{% endblock %}
