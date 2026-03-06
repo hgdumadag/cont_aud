@@ -5,7 +5,9 @@ from django.shortcuts import get_object_or_404, redirect, render
 
 from .forms import ControlCatalogForm, ExceptionUpdateForm, UploadWorkbookForm
 from .models import AuditRun, ControlCatalog, DQFinding, ExceptionEvent, ExceptionRecord, ExceptionStatusChoices, SeverityChoices
+from .services.constants import SOURCE_SPECS
 from .services.exports import build_weekly_pack
+from .services.ingest import uniquify_headers
 from .services.pipeline import process_uploaded_workbook
 
 
@@ -15,6 +17,96 @@ OPEN_EXCEPTION_STATUSES = [
     ExceptionStatusChoices.VALIDATED,
     ExceptionStatusChoices.IN_PROGRESS,
 ]
+
+CANONICAL_DETAIL_FIELDS = [
+    ('source_row_number', 'Source row number'),
+    ('record_class', 'Record class'),
+    ('company_code', 'Company Code'),
+    ('vendor_code', 'Vendor Code'),
+    ('vendor_name', 'Vendor Name'),
+    ('fiscal_year', 'Fiscal year'),
+    ('payment_document', 'Payment Document'),
+    ('accounting_document', 'Accounting document'),
+    ('payment_method', 'Payment Method'),
+    ('document_type', 'Document Type'),
+    ('process_group', 'Process Group'),
+    ('nature_of_transaction', 'Nature of Transaction'),
+    ('status_code', 'Status'),
+    ('status_description', 'Status Description'),
+    ('document_date', 'Document Date'),
+    ('baseline_date', 'Baseline Date'),
+    ('posting_date', 'Posting Date'),
+    ('payment_entry_date', 'Payment Entry Date'),
+    ('payment_release_date', 'Payment Release Date'),
+    ('clearing_date', 'Clearing Date'),
+    ('net_due_date', 'Net Due Date'),
+    ('status_date', 'Status Date'),
+    ('amount_local', 'Amount (Local)'),
+    ('amount_document', 'Amount (Document)'),
+    ('days_of_status', 'Days of Status'),
+    ('pot', 'POT'),
+    ('payment_cycle_time', 'Payment Cycle Time'),
+    ('total_processing_time', 'Total Processing Time'),
+    ('transaction_key', 'Transaction Key'),
+    ('payment_key', 'Payment Key'),
+]
+
+
+def _display_value(value):
+    if value in (None, ''):
+        return '-'
+    if hasattr(value, 'isoformat'):
+        return value.isoformat()
+    return str(value)
+
+
+def _display_header(header_name):
+    if '__' in header_name:
+        base, occurrence = header_name.rsplit('__', 1)
+        if occurrence.isdigit():
+            return f'{base} ({occurrence})'
+    return header_name
+
+
+def _humanize_key(key):
+    text = key.replace('_', ' ').strip()
+    return text[:1].upper() + text[1:] if text else key
+
+
+def _build_exception_context_rows(exception):
+    rows = [('Finding scope', 'Row-level exception' if exception.normalized_record_id else 'Sheet-level / column-level exception')]
+    for key, value in (exception.extra_context or {}).items():
+        if key == 'previous_ratio' and value is None:
+            display = 'No baseline'
+        elif isinstance(value, float) and 'ratio' in key:
+            display = f'{value:.0%}'
+        elif isinstance(value, bool):
+            display = 'Yes' if value else 'No'
+        else:
+            display = _display_value(value)
+        rows.append((_humanize_key(key), display))
+    return rows
+
+
+def _build_canonical_detail_rows(record):
+    return [(label, _display_value(getattr(record, field_name, None))) for field_name, label in CANONICAL_DETAIL_FIELDS]
+
+
+def _build_source_row_rows(record):
+    spec = SOURCE_SPECS.get(record.entity)
+    if not spec:
+        return []
+    source_to_attr = {source_field: attr_name for attr_name, source_field in spec['canonical_map'].items()}
+    ordered_rows = []
+    for header_name in uniquify_headers(spec['header_sequence']):
+        if header_name in record.source_payload:
+            value = record.source_payload.get(header_name)
+        else:
+            base_header = header_name.split('__', 1)[0]
+            attr_name = source_to_attr.get(base_header)
+            value = getattr(record, attr_name, None) if attr_name and header_name == base_header else record.source_payload.get(header_name)
+        ordered_rows.append((_display_header(header_name), _display_value(value)))
+    return ordered_rows
 
 
 def dashboard(request):
@@ -115,7 +207,10 @@ def exception_list(request):
 
 
 def exception_detail(request, exception_id):
-    exception = get_object_or_404(ExceptionRecord.objects.select_related('control', 'run'), exception_id=exception_id)
+    exception = get_object_or_404(
+        ExceptionRecord.objects.select_related('control', 'run', 'normalized_record'),
+        exception_id=exception_id,
+    )
     before = {
         'status': exception.status,
         'disposition': exception.disposition,
@@ -143,7 +238,18 @@ def exception_detail(request, exception_id):
             return redirect('auditpilot:exception_detail', exception_id=exception.exception_id)
     else:
         form = ExceptionUpdateForm(instance=exception)
-    return render(request, 'auditpilot/exception_detail.html', {'exception': exception, 'form': form})
+    normalized_record = exception.normalized_record
+    return render(
+        request,
+        'auditpilot/exception_detail.html',
+        {
+            'exception': exception,
+            'form': form,
+            'exception_context_rows': _build_exception_context_rows(exception),
+            'canonical_detail_rows': _build_canonical_detail_rows(normalized_record) if normalized_record else [],
+            'source_row_rows': _build_source_row_rows(normalized_record) if normalized_record else [],
+        },
+    )
 
 
 def control_catalog(request):

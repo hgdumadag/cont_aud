@@ -14,8 +14,8 @@
         <div class="meta-grid">
             <div><span>Run</span><strong><a href="{% url 'auditpilot:run_detail' exception.run.id %}">Run {{ exception.run.id }}</a></strong></div>
             <div><span>Control</span><strong>{{ exception.control.control_id|default:"-" }}</strong></div>
-            <div><span>Fingerprint</span><strong>{{ exception.record_fingerprint }}</strong></div>
             <div><span>Opened</span><strong>{{ exception.opened_at|date:"Y-m-d H:i" }}</strong></div>
+            <div class="full-span"><span>Fingerprint</span><strong>{{ exception.record_fingerprint }}</strong></div>
         </div>
     </article>
     <article class="card">
@@ -32,5 +32,84 @@
             <button class="button primary" type="submit">Save changes</button>
         </form>
     </article>
+</section>
+
+<section class="panel two-column">
+    <article class="card">
+        <h2>Exception context</h2>
+        <div class="table-wrap">
+            <table class="detail-table">
+                <thead>
+                    <tr>
+                        <th>Field</th>
+                        <th>Value</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for label, value in exception_context_rows %}
+                        <tr>
+                            <td>{{ label }}</td>
+                            <td class="value-wrap">{{ value }}</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% if not canonical_detail_rows %}
+            <p class="empty-state">This exception is not tied to one transaction row, so there is no canonical row view or source-row snapshot.</p>
+        {% endif %}
+    </article>
+    <article class="card">
+        <h2>Canonical record view</h2>
+        {% if canonical_detail_rows %}
+            <div class="table-wrap">
+                <table class="detail-table">
+                    <thead>
+                        <tr>
+                            <th>Field</th>
+                            <th>Value</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for label, value in canonical_detail_rows %}
+                            <tr>
+                                <td>{{ label }}</td>
+                                <td class="value-wrap">{{ value }}</td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <p class="empty-state">No normalized record is linked to this exception.</p>
+        {% endif %}
+    </article>
+    
+</section>
+
+<section class="card">
+    <h2>Source row snapshot</h2>
+    {% if source_row_rows %}
+        <div class="table-wrap">
+            <table class="detail-table">
+                <thead>
+                    <tr>
+                        <th>Column</th>
+                        <th>Value</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for label, value in source_row_rows %}
+                        <tr>
+                            <td>{{ label }}</td>
+                            <td class="value-wrap">{{ value }}</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% else %}
+        <p class="empty-state">No source-row snapshot is available for this exception.</p>
+    {% endif %}
 </section>
 {% endblock %}

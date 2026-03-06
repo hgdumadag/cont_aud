@@ -7,9 +7,11 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 from openpyxl import Workbook, load_workbook
+import pandas as pd
 
 from auditpilot.models import AuditRun, ControlCatalog, ExceptionRecord, ExceptionStatusChoices, RecordClassChoices
 from auditpilot.services.constants import SOURCE_SPECS
+from auditpilot.services.dq import evaluate_sheet
 from auditpilot.services.normalize import normalize_sheet
 from auditpilot.services.rules import evaluate_age_over_threshold, evaluate_date_order, evaluate_duplicate_key, evaluate_non_negative_metric, evaluate_required_when, ensure_starter_controls
 from auditpilot.services.utils import clean_scalar, parse_date_value, parse_decimal_value
@@ -181,6 +183,40 @@ class UtilityAndRuleTests(TestCase):
         duplicate_control = ControlCatalog.objects.get(control_id='ALL-DUPLICATE-TRANSACTION-KEY')
         self.assertEqual(len(evaluate_duplicate_key(duplicate_control, [record, record])), 2)
 
+    def test_first_run_placeholder_warning_has_no_previous_baseline(self):
+        headers = SOURCE_SPECS['JGS']['header_sequence']
+        payload = SimpleNamespace(
+            original_headers=headers,
+            dataframe=pd.DataFrame(
+                [
+                    {
+                        **{header: '' for header in headers},
+                        'Company Code': '1000',
+                        'Fiscal year': 2026,
+                        'Vendor Code': '6001',
+                        'Vendor Name': 'Vendor B',
+                        'SAP Document Number': 'SAP-001',
+                        'Payment Document': 'P-001',
+                        'Payment Method': 'Bank transfer',
+                        'Document Date': '2026-03-02',
+                        'SAP Document Posting date': '2026-03-03',
+                        'Adjusted Net Due Date': '2026-03-10',
+                        'Status Date': '2026-03-05',
+                        'Amount in Local Curr': '2500',
+                        'Bank Name': 'UGL/Not assigned',
+                        '__source_row_number': 2,
+                    }
+                ]
+            ),
+        )
+        unsaved_run = AuditRun()
+        evaluation = evaluate_sheet(unsaved_run, 'JGS', payload)
+        placeholder_flag = next(flag for flag in evaluation.metrics['placeholder_flags'] if flag['column'] == 'Bank Name')
+        self.assertEqual(placeholder_flag['ratio'], 1.0)
+        self.assertIsNone(placeholder_flag['previous_ratio'])
+        self.assertFalse(placeholder_flag['baseline_available'])
+        self.assertEqual(placeholder_flag['triggered_by'], 'threshold')
+
 
 class UploadFlowTests(TestCase):
     @classmethod
@@ -213,9 +249,27 @@ class UploadFlowTests(TestCase):
         self.assertEqual(workbook.sheetnames, ['Run Summary', 'DQ Report', 'New Exceptions', 'Open Exceptions', 'Closed This Period'])
         detail_response = self.client.get(reverse('auditpilot:run_detail', args=[run.id]))
         self.assertEqual(detail_response.status_code, 200)
+        self.assertContains(detail_response, 'Recent exceptions')
         first_exception = run.exceptions.first()
         exception_response = self.client.get(reverse('auditpilot:exception_detail', args=[first_exception.exception_id]))
         self.assertEqual(exception_response.status_code, 200)
+        self.assertContains(exception_response, 'Canonical record view')
+        self.assertContains(exception_response, 'Source row snapshot')
+        self.assertContains(exception_response, 'Source row number')
+        placeholder_exception = run.exceptions.create(
+            control=ControlCatalog.objects.get(control_id='ALL-PLACEHOLDER-SPIKE'),
+            entity='JGS',
+            record_fingerprint='sheet-level-fingerprint',
+            severity='MEDIUM',
+            title='Placeholder density warning',
+            detail='Bank Reference placeholder ratio is 100% (previous 0%).',
+            extra_context={'column': 'Bank Reference', 'ratio': 1.0, 'previous_ratio': 0.0},
+        )
+        placeholder_response = self.client.get(reverse('auditpilot:exception_detail', args=[placeholder_exception.exception_id]))
+        self.assertEqual(placeholder_response.status_code, 200)
+        self.assertContains(placeholder_response, 'Exception context')
+        self.assertContains(placeholder_response, 'Finding scope')
+        self.assertContains(placeholder_response, 'Sheet-level / column-level exception')
 
     @override_settings(MEDIA_ROOT=tempfile.gettempdir())
     def test_missing_required_column_fails_dq_gate(self):

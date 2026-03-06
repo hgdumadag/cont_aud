@@ -143,9 +143,19 @@ def evaluate_sheet(run, sheet_name, payload):
     previous_ratios = previous_sheet.metrics_json.get('placeholder_ratios', {}) if previous_sheet else {}
     placeholder_flags = []
     for column, ratio in placeholder_ratios.items():
-        previous_ratio = previous_ratios.get(column, 0)
-        if ratio >= 0.20 or (ratio - previous_ratio) >= 0.10:
-            placeholder_flags.append({'column': column, 'ratio': ratio, 'previous_ratio': previous_ratio})
+        previous_ratio = previous_ratios.get(column) if previous_sheet else None
+        threshold_breach = ratio >= 0.20
+        delta_breach = previous_ratio is not None and (ratio - previous_ratio) >= 0.10
+        if threshold_breach or delta_breach:
+            placeholder_flags.append(
+                {
+                    'column': column,
+                    'ratio': ratio,
+                    'previous_ratio': previous_ratio,
+                    'baseline_available': previous_ratio is not None,
+                    'triggered_by': 'threshold_and_delta' if threshold_breach and delta_breach else 'threshold' if threshold_breach else 'delta',
+                }
+            )
 
     findings = []
     status = SheetStatusChoices.PASSED

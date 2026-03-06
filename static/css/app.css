@@ -132,7 +132,13 @@ thead th { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.08em
     gap: 1rem;
 }
 .meta-grid span { display: block; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em; opacity: 0.6; }
-.meta-grid strong { display: block; margin-top: 0.35rem; }
+.meta-grid strong {
+    display: block;
+    margin-top: 0.35rem;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+.meta-grid .full-span { grid-column: 1 / -1; }
 .spark-list, .list-stack { display: grid; gap: 0.8rem; }
 .spark-row {
     display: grid;
@@ -175,6 +181,15 @@ thead th { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.08em
     background: rgba(255,255,255,0.9);
 }
 .empty-state { color: rgba(18,32,43,0.66); }
+.detail-table td:first-child {
+    width: 34%;
+    font-weight: 700;
+    color: rgba(18, 32, 43, 0.72);
+}
+.value-wrap {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
 @keyframes rise {
     from { opacity: 0; transform: translateY(10px); }
     to { opacity: 1; transform: translateY(0); }

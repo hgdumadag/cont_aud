@@ -134,7 +134,19 @@ def evaluate_duplicate_key(control, records):
 def evaluate_placeholder_spike(sheet_run):
     findings = []
     for flag in sheet_run.metrics_json.get('placeholder_flags', []):
-        findings.append({'record_fingerprint': stable_hash([sheet_run.sheet_name, flag['column']]), 'title': 'Placeholder density warning', 'detail': f"{flag['column']} placeholder ratio is {flag['ratio']:.0%} (previous {flag['previous_ratio']:.0%}).", 'extra_context': flag})
+        previous_ratio = flag.get('previous_ratio')
+        if previous_ratio is None:
+            detail = f"{flag['column']} placeholder ratio is {flag['ratio']:.0%} (no previous baseline)."
+        else:
+            detail = f"{flag['column']} placeholder ratio is {flag['ratio']:.0%} (previous {previous_ratio:.0%})."
+        findings.append(
+            {
+                'record_fingerprint': stable_hash([sheet_run.sheet_name, flag['column']]),
+                'title': 'Placeholder density warning',
+                'detail': detail,
+                'extra_context': flag,
+            }
+        )
     return findings
 
 
