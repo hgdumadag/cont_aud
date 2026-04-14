@@ -138,25 +138,96 @@ def build_workbook_bytes(include_jgs_payment_document=True):
     ]:
         sheet = workbook.create_sheet(sheet_name)
         headers = list(SOURCE_SPECS[sheet_name]['header_sequence'])
-        sheet.append(headers)
-        row = dict(jgs_row)
-        row.update(
-            {
+        if sheet_name == 'CEB':
+            row = {
+                'Fiscal year': 2026,
                 'Company Code': company_code,
                 'Company Name': f'{sheet_name} Business Unit',
                 'Vendor Code': vendor_code,
                 'Vendor Name': f'Vendor {sheet_name}',
-                'SAP Document Number': f'{sheet_name}-SAP-001',
+                'Vendor Account Group': 'Affiliates',
+                'Posting key': '21',
+                'Document type': 'KR',
+                'Payment Document Desc': 'Vendor Invoice',
+                'Document number': f'{sheet_name}-DOC-001',
+                'Reference Document': f'{sheet_name}-REF-001',
+                'Baseline Date': '2026-03-01',
+                'Net Due Date': '2026-03-10',
+                'Document Date': '2026-03-01',
+                'Posting Date': '2026-03-02',
                 'Payment Document': payment_document,
-                'Bank Reference': bank_reference,
-                'Amount in Local Curr': amount,
-                'Status': 'Open',
-                'Status Description': f'{sheet_name} pending treasury',
-                'Process Group': 'Services',
-                'Nature of Transaction': 'IT',
+                'Clearing': '2026-03-03',
+                'Payment Terms': '30D',
+                'Payment Method': 'Check',
+                'Payment Description': f'{sheet_name} pending treasury',
+                'Nature of Transaction': 'Services',
+                'Process Group': 'Others',
+                'Payment Term Group': '1',
+                'Payments Term Group': '<30 Days',
+                'GL Account': 'JACA/22202001',
+                'Item Text': 'Service fee',
+                'Is CMS?': 'No',
+                'Indicator: PO Based': 'No',
+                'Purchasing Document': '#',
+                'Item': '10',
+                'Plant': 'Makati',
+                'Username': 'MCPMAEVE',
+                'Long Text Note': 'Service fee',
+                'Date Received': '2026-03-01',
+                'Date forwarded to Ap': '2026-03-02',
+                'Date Forwarded to Cheq Prep': '2026-03-03',
+                'Document Currency': 'PHP',
             }
-        )
-        sheet.append(build_row(headers, row))
+            sheet.append([None] * len(headers))
+            sheet.append(headers)
+            sheet.append(build_row(headers, row))
+        else:
+            row = {
+                'Company Code': company_code,
+                'Company Description': f'{sheet_name} Business Unit',
+                'Fiscal year': 2026,
+                'Vendor Code': vendor_code,
+                'Vendor Name': f'Vendor {sheet_name}',
+                'Vendor Account Group': 'Local Vendors',
+                'Reference document': f'{sheet_name}-REF-001',
+                'Payment Document': payment_document,
+                'Check Number': bank_reference if sheet_name != 'RRHI' else 'CHK-001',
+                'Payment Method': 'Check',
+                'Terms of Payment': 'Z015',
+                'Status': '4A',
+                'Status Description': f'{sheet_name} pending treasury',
+                'Posting Date': '2026-03-01',
+                'Unblocking Date': '2026-03-01',
+                'SAP Document Number': f'{sheet_name}-SAP-001',
+                'SAP Document Clearing Date': '2026-03-03',
+                'Payment Document Date': '2026-03-01',
+                'Payment Release Date': '2026-03-02',
+                'Baseline Date': '2026-03-01',
+                'Net due date': '2026-03-10',
+                'Status Date': '2026-03-03',
+                'Assignment': f'{sheet_name}-ASSIGN-001',
+                'Document Header Text': 'Invoice',
+                'Payable Voucher Processor': 'Processor',
+                'Accounting Check Status': 'OK',
+                'SLA Days': '30',
+                'Days of Status': '5',
+                'Invoice Count (Trade and Non-Trade)': '2',
+                'Invoice Amount (Trade and Non-Trade)': amount,
+                'SLA Difference': '0',
+                'POT': '2',
+                'with Release Date': '1',
+                'POT with as of Date': '0',
+                'POT with Payment Release Date': '1',
+                'AP TAT': '2',
+                'with Clearing Date': '1',
+                'Clearing': '2026-03-03',
+                'Posting': '2026-03-01',
+                'CP TAT': '1',
+                'Payment Cycle Time': '8',
+                'Total Processing Time': '6',
+            }
+            sheet.append(headers)
+            sheet.append(build_row(headers, row))
 
     output = BytesIO()
     workbook.save(output)

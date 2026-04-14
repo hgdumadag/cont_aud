@@ -99,7 +99,13 @@ def _build_source_row_rows(record):
     spec = SOURCE_SPECS.get(record.entity)
     if not spec:
         return []
-    source_to_attr = {source_field: attr_name for attr_name, source_field in spec['canonical_map'].items()}
+    source_to_attr = {}
+    for attr_name, source_field in spec['canonical_map'].items():
+        if isinstance(source_field, (list, tuple, set)):
+            for candidate in source_field:
+                source_to_attr[candidate] = attr_name
+        else:
+            source_to_attr[source_field] = attr_name
     ordered_rows = []
     for header_name in uniquify_headers(spec['header_sequence']):
         if header_name in record.source_payload:

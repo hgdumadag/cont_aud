@@ -14,9 +14,17 @@ def _is_derived_row(row, fields):
     return False
 
 
+def _source_candidates(source):
+    if isinstance(source, (list, tuple, set)):
+        return list(source)
+    return [source]
+
+
 def normalize_sheet(run, sheet_name, dataframe):
     spec = SOURCE_SPECS[sheet_name]
-    mapped_headers = set(spec['canonical_map'].values())
+    mapped_headers = set()
+    for source in spec['canonical_map'].values():
+        mapped_headers.update(_source_candidates(source))
     records = []
     base_count = 0
     derived_count = 0
@@ -24,7 +32,11 @@ def normalize_sheet(run, sheet_name, dataframe):
         cleaned_row = {key: clean_scalar(value) for key, value in raw_row.items()}
         canonical = {}
         for target, source in spec['canonical_map'].items():
-            value = cleaned_row.get(source)
+            value = None
+            for candidate in _source_candidates(source):
+                if candidate in cleaned_row:
+                    value = cleaned_row.get(candidate)
+                    break
             if target in {'document_date', 'baseline_date', 'posting_date', 'payment_entry_date', 'payment_release_date', 'clearing_date', 'net_due_date', 'status_date'}:
                 canonical[target] = parse_date_value(value)
             elif target in {'amount_local', 'amount_document', 'days_of_status', 'pot', 'payment_cycle_time', 'total_processing_time'}:

@@ -3,6 +3,7 @@
 {% block content %}
 <section class="card-grid metrics-grid">
     <article class="metric-card accent-teal"><span>Status</span><strong>{{ run.get_status_display }}</strong></article>
+    <article class="metric-card accent-slate"><span>Stage</span><strong>{{ run.processing_stage|default:"-" }}</strong></article>
     <article class="metric-card accent-orange"><span>Rows</span><strong>{{ run.total_rows }}</strong></article>
     <article class="metric-card accent-slate"><span>Exceptions</span><strong>{{ run.total_exceptions }}</strong></article>
     <article class="metric-card accent-gold"><span>Warnings</span><strong>{{ run.total_warnings }}</strong></article>

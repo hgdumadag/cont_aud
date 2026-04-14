@@ -85,6 +85,7 @@ class AuditRun(models.Model):
     source_file = models.ForeignKey(SourceFileArchive, on_delete=models.PROTECT, related_name='runs')
     run_identifier = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
     status = models.CharField(max_length=24, choices=RunStatusChoices.choices, default=RunStatusChoices.PENDING)
+    processing_stage = models.CharField(max_length=120, blank=True)
     as_of_label = models.CharField(max_length=120, blank=True)
     uploaded_by = models.CharField(max_length=120, blank=True)
     overall_message = models.TextField(blank=True)

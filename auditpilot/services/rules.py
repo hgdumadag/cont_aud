@@ -41,7 +41,7 @@ def _create_exception(run, control, sheet_name, finding):
         run=run,
         control=control,
         normalized_record=finding.get('normalized_record'),
-        recurrence_of=finding.get('recurrence_of'),
+        recurrence_of_id=finding.get('recurrence_of'),
         entity=sheet_name,
         record_fingerprint=finding.get('record_fingerprint') or stable_hash([sheet_name, finding.get('title'), finding.get('detail')]),
         severity=control.severity,
@@ -155,10 +155,21 @@ def evaluate_recurrence_window(control, run, records):
     params = control.parameters_json
     records = _filter_records(records, params.get('record_class'))
     cutoff = timezone.now() - timedelta(days=params.get('days', 60))
+    recent_prior = {}
+    for prior in (
+        ExceptionRecord.objects.filter(opened_at__gte=cutoff)
+        .exclude(run=run)
+        .values('id', 'record_fingerprint', 'opened_at')
+        .order_by('-opened_at')
+    ):
+        recent_prior.setdefault(
+            prior['record_fingerprint'],
+            prior,
+        )
     for record in records:
-        prior = ExceptionRecord.objects.filter(record_fingerprint=record.record_fingerprint, opened_at__gte=cutoff).exclude(run=run).order_by('-opened_at').first()
+        prior = recent_prior.get(record.record_fingerprint)
         if prior:
-            findings.append({'normalized_record': record, 'record_fingerprint': record.record_fingerprint, 'title': 'Recurring exception pattern', 'detail': f"Record fingerprint matched prior exception opened on {prior.opened_at.date()}.", 'recurrence_of': prior})
+            findings.append({'normalized_record': record, 'record_fingerprint': record.record_fingerprint, 'title': 'Recurring exception pattern', 'detail': f"Record fingerprint matched prior exception opened on {prior['opened_at'].date()}.", 'recurrence_of': prior['id']})
     return findings
 
 

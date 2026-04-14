@@ -8,6 +8,7 @@ from django.utils import timezone
 from openpyxl import load_workbook
 
 from auditpilot.models import SourceFileArchive
+from auditpilot.services.constants import SOURCE_SPECS
 from auditpilot.services.utils import normalize_text
 
 
@@ -34,6 +35,25 @@ def uniquify_headers(headers):
     return internal
 
 
+def _combine_header_rows(header_rows):
+    max_length = max((len(row) for row in header_rows), default=0)
+    combined = []
+    for index in range(max_length):
+        pieces = []
+        for row in header_rows:
+            value = normalize_text(row[index]) if index < len(row) else ''
+            if value:
+                pieces.append(value)
+        if not pieces:
+            combined.append(f'Unnamed Column {index + 1}')
+            continue
+        if len(pieces) == 1:
+            combined.append(pieces[0])
+            continue
+        combined.append(f"{pieces[0]} ({pieces[-1]})" if pieces[-1] not in pieces[:-1] else ' '.join(pieces))
+    return combined
+
+
 def store_uploaded_workbook(uploaded_file, as_of_label='', uploaded_by=''):
     digest = hashlib.sha256()
     for chunk in uploaded_file.chunks():
@@ -56,15 +76,19 @@ def load_workbook_payload(path):
     workbook = load_workbook(path, read_only=True, data_only=True)
     payload = {}
     for worksheet in workbook.worksheets:
+        spec = SOURCE_SPECS.get(worksheet.title, {})
         rows = worksheet.iter_rows(values_only=True)
+        header_row_count = spec.get('header_rows', 1)
+        raw_header_rows = []
         try:
-            raw_headers = next(rows)
+            for _ in range(header_row_count):
+                raw_header_rows.append(next(rows))
         except StopIteration:
             continue
-        original_headers = [normalize_text(header) or f'Unnamed Column {index}' for index, header in enumerate(raw_headers, start=1)]
+        original_headers = _combine_header_rows(raw_header_rows)
         internal_headers = uniquify_headers(original_headers)
         records = []
-        for row_number, row in enumerate(rows, start=2):
+        for row_number, row in enumerate(rows, start=header_row_count + 1):
             values = list(row)
             if len(values) < len(internal_headers):
                 values.extend([None] * (len(internal_headers) - len(values)))

@@ -32,6 +32,24 @@ def _count_difference(expected, actual):
     return missing
 
 
+def _resolve_aliases(value, aliases):
+    if isinstance(value, (list, tuple, set)):
+        return list(value)
+    if value in aliases:
+        return list(aliases[value])
+    return [value]
+
+
+def _missing_required_headers(required_headers, actual_headers, aliases):
+    actual_set = set(actual_headers)
+    missing = []
+    for header in required_headers:
+        candidates = _resolve_aliases(header, aliases)
+        if not any(candidate in actual_set for candidate in candidates):
+            missing.append(header)
+    return missing
+
+
 def _placeholder_ratios(dataframe):
     ratios = {}
     if dataframe.empty:
@@ -47,7 +65,7 @@ def _placeholder_ratios(dataframe):
     return ratios
 
 
-def _date_parse_failures(dataframe, fields):
+def _date_parse_failures(dataframe, fields, sample_size=25):
     failures = {}
     for field in fields:
         if field not in dataframe.columns:
@@ -60,14 +78,23 @@ def _date_parse_failures(dataframe, fields):
             if parse_date_value(value) is None:
                 bad_rows.append(int(row['__source_row_number']))
         if bad_rows:
-            failures[field] = bad_rows
+            failures[field] = {
+                'count': len(bad_rows),
+                'sample_rows': bad_rows[:sample_size],
+                'truncated': len(bad_rows) > sample_size,
+            }
     return failures
 
 
 def _count_duplicate_candidates(dataframe, fields):
     if dataframe.empty:
         return 0
-    subset = [field for field in fields if field in dataframe.columns]
+    subset = []
+    for field in fields:
+        if isinstance(field, (list, tuple, set)):
+            subset.extend([candidate for candidate in field if candidate in dataframe.columns][:1])
+        elif field in dataframe.columns:
+            subset.append(field)
     if not subset:
         return 0
     working = dataframe[subset].copy()
@@ -116,8 +143,7 @@ def evaluate_sheet(run, sheet_name, payload):
     actual_headers = payload.original_headers
     actual_counter = Counter(actual_headers)
     expected_counter = Counter(spec['header_sequence'])
-    required_counter = Counter(spec['required_headers'])
-    missing_required = _count_difference(required_counter, actual_counter)
+    missing_required = _missing_required_headers(spec['required_headers'], actual_headers, spec.get('header_aliases', {}))
     new_columns = _count_difference(actual_counter, expected_counter)
     row_count = len(payload.dataframe.index)
 
@@ -133,6 +159,35 @@ def evaluate_sheet(run, sheet_name, payload):
             required_headers_json=spec['required_headers'],
         )
     schema_version = f"{sheet_name}-v{snapshot.version}"
+
+    findings = []
+    status = SheetStatusChoices.PASSED
+    if missing_required:
+        status = SheetStatusChoices.FAILED
+        findings.append({'severity': FindingSeverity.ERROR, 'code': 'missing_required_headers', 'message': 'Critical columns are missing from the worksheet.', 'details_json': {'headers': missing_required}})
+    if new_columns:
+        if status != SheetStatusChoices.FAILED:
+            status = SheetStatusChoices.WARNING
+        findings.append({'severity': FindingSeverity.WARNING, 'code': 'unexpected_columns', 'message': 'The worksheet contains columns not seen in the expected pilot schema.', 'details_json': {'headers': new_columns}})
+    if missing_required:
+        return SheetEvaluation(
+            sheet_name=sheet_name,
+            dataframe=payload.dataframe,
+            schema_version=schema_version,
+            status=status,
+            hard_fail=True,
+            row_count=row_count,
+            metrics={
+                'placeholder_ratios': {},
+                'placeholder_flags': [],
+                'date_parse_failures': {},
+                'duplicate_candidate_count': 0,
+                'derived_candidate_count': 0,
+            },
+            missing_required=missing_required,
+            new_columns=new_columns,
+            findings=findings,
+        )
 
     placeholder_ratios = _placeholder_ratios(payload.dataframe)
     date_failures = _date_parse_failures(payload.dataframe, spec['date_fields'])
@@ -157,15 +212,6 @@ def evaluate_sheet(run, sheet_name, payload):
                 }
             )
 
-    findings = []
-    status = SheetStatusChoices.PASSED
-    if missing_required:
-        status = SheetStatusChoices.FAILED
-        findings.append({'severity': FindingSeverity.ERROR, 'code': 'missing_required_headers', 'message': 'Critical columns are missing from the worksheet.', 'details_json': {'headers': missing_required}})
-    if new_columns:
-        if status != SheetStatusChoices.FAILED:
-            status = SheetStatusChoices.WARNING
-        findings.append({'severity': FindingSeverity.WARNING, 'code': 'unexpected_columns', 'message': 'The worksheet contains columns not seen in the expected pilot schema.', 'details_json': {'headers': new_columns}})
     if date_failures:
         if status != SheetStatusChoices.FAILED:
             status = SheetStatusChoices.WARNING
