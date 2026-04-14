@@ -6,7 +6,7 @@ from django.db.models import Max
 
 from auditpilot.models import FindingSeverity, RunStatusChoices, SchemaSnapshot, SheetRun, SheetStatusChoices
 from auditpilot.services.constants import SOURCE_SPECS
-from auditpilot.services.utils import is_placeholder, parse_date_value, stable_hash
+from auditpilot.services.utils import PLACEHOLDER_TOKENS, stable_hash
 
 
 @dataclass
@@ -57,11 +57,13 @@ def _placeholder_ratios(dataframe):
     for column in dataframe.columns:
         if column == '__source_row_number':
             continue
-        populated = [value for value in dataframe[column].tolist() if value not in (None, '')]
-        if not populated:
+        series = dataframe[column].fillna('').astype(str).str.strip()
+        populated = series.ne('')
+        if not populated.any():
             continue
-        placeholders = sum(1 for value in populated if is_placeholder(value))
-        ratios[column] = round(placeholders / len(populated), 4)
+        lower = series.str.lower()
+        placeholders = lower.isin(PLACEHOLDER_TOKENS) | (lower.str.contains('not assigned', na=False) & series.str.contains('/', na=False))
+        ratios[column] = round(float(placeholders[populated].mean()), 4)
     return ratios
 
 
@@ -70,13 +72,11 @@ def _date_parse_failures(dataframe, fields, sample_size=25):
     for field in fields:
         if field not in dataframe.columns:
             continue
-        bad_rows = []
-        for _, row in dataframe[['__source_row_number', field]].iterrows():
-            value = row[field]
-            if value in (None, ''):
-                continue
-            if parse_date_value(value) is None:
-                bad_rows.append(int(row['__source_row_number']))
+        subset = dataframe[['__source_row_number', field]].copy()
+        series = subset[field]
+        populated = series.notna() & series.astype(str).str.strip().ne('')
+        parsed = pd.to_datetime(series, errors='coerce', cache=True, format='mixed')
+        bad_rows = subset.loc[populated & parsed.isna(), '__source_row_number'].astype(int).tolist()
         if bad_rows:
             failures[field] = {
                 'count': len(bad_rows),
@@ -100,7 +100,8 @@ def _count_duplicate_candidates(dataframe, fields):
     working = dataframe[subset].copy()
     for field in subset:
         if 'Date' in field or 'date' in field:
-            working[field] = working[field].map(lambda value: parse_date_value(value).isoformat() if parse_date_value(value) else '')
+            parsed = pd.to_datetime(working[field], errors='coerce', cache=True, format='mixed')
+            working[field] = parsed.dt.strftime('%Y-%m-%d').fillna('')
         else:
             working[field] = working[field].fillna('').astype(str).str.strip()
     return int(working.duplicated(subset=subset, keep=False).sum())
@@ -110,16 +111,11 @@ def _count_derived_candidates(dataframe, fields):
     if dataframe.empty:
         return 0
     keywords = ('result', 'summary', 'subtotal', 'total')
-    count = 0
-    for _, row in dataframe.iterrows():
-        texts = []
-        for field in fields:
-            value = row.get(field)
-            if value is not None:
-                texts.append(str(value).lower())
-        if any(any(keyword in text for keyword in keywords) for text in texts):
-            count += 1
-    return count
+    columns = [field for field in fields if field in dataframe.columns]
+    if not columns:
+        return 0
+    text = dataframe[columns].fillna('').astype(str).agg(' '.join, axis=1).str.lower()
+    return int(text.str.contains('|'.join(keywords), regex=True, na=False).sum())
 
 
 def evaluate_sheet(run, sheet_name, payload):

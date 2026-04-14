@@ -53,7 +53,7 @@ def parse_date_value(value):
         return None
     if isinstance(value, date):
         return value
-    parsed = pd.to_datetime(value, errors='coerce')
+    parsed = pd.to_datetime(value, errors='coerce', format='mixed')
     if pd.isna(parsed):
         return None
     return parsed.date()
