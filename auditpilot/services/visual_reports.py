@@ -514,6 +514,16 @@ def _draw_text_block(
     return current_y - y
 
 
+def _truncate_text(draw: ImageDraw.ImageDraw, text: str, font, max_width: int) -> str:
+    if draw.textlength(text, font=font) <= max_width:
+        return text
+    ellipsis = '...'
+    trimmed = text
+    while trimmed and draw.textlength(f'{trimmed}{ellipsis}', font=font) > max_width:
+        trimmed = trimmed[:-1]
+    return f'{trimmed}{ellipsis}' if trimmed else ellipsis
+
+
 def _draw_panel(draw: ImageDraw.ImageDraw, box: tuple[int, int, int, int], fill: str, outline: str, radius: int = 28) -> None:
     draw.rounded_rectangle(box, radius=radius, fill=fill, outline=outline, width=2)
 
@@ -578,8 +588,8 @@ def _draw_row_chart(
     for index, row in enumerate(rows[:max_rows]):
         row_y = body_top + index * row_height
         if isinstance(row, ComparisonRow):
-            draw.text((x0 + 24, row_y), row.label, font=label_font, fill=PALETTE['ink'])
-            current_bar_x = x0 + 270
+            draw.text((x0 + 24, row_y), _truncate_text(draw, row.label, label_font, 220), font=label_font, fill=PALETTE['ink'])
+            current_bar_x = x0 + 300
             bar_width = x1 - current_bar_x - 170
             draw.rounded_rectangle((current_bar_x, row_y + 10, current_bar_x + bar_width, row_y + 30), radius=10, fill='#edf1f4')
             draw.rounded_rectangle((current_bar_x, row_y + 10, current_bar_x + int(bar_width * (row.current_width / 100)), row_y + 30), radius=10, fill=_accent_color(row.accent))
@@ -591,12 +601,12 @@ def _draw_row_chart(
             draw.text((x1 - 150, row_y - 2), current_text, font=body_font, fill=PALETTE['ink'])
             draw.text((x1 - 150, row_y + 30), previous_text, font=body_font, fill=PALETTE['muted'])
         else:
-            draw.text((x0 + 24, row_y), row.label, font=label_font, fill=PALETTE['ink'])
+            draw.text((x0 + 24, row_y), _truncate_text(draw, row.label, label_font, 220), font=label_font, fill=PALETTE['ink'])
             draw.text((x1 - 116, row_y), row.share_label, font=body_font, fill=PALETTE['muted'])
             draw.text((x1 - 116, row_y + 30), _format_int(row.count), font=body_font, fill=PALETTE['ink'])
-            bar_width = x1 - (x0 + 270) - 130
-            draw.rounded_rectangle((x0 + 270, row_y + 10, x0 + 270 + bar_width, row_y + 30), radius=10, fill='#edf1f4')
-            draw.rounded_rectangle((x0 + 270, row_y + 10, x0 + 270 + int(bar_width * (row.current_width / 100)), row_y + 30), radius=10, fill=PALETTE['teal'])
+            bar_width = x1 - (x0 + 300) - 130
+            draw.rounded_rectangle((x0 + 300, row_y + 10, x0 + 300 + bar_width, row_y + 30), radius=10, fill='#edf1f4')
+            draw.rounded_rectangle((x0 + 300, row_y + 10, x0 + 300 + int(bar_width * (row.current_width / 100)), row_y + 30), radius=10, fill=PALETTE['teal'])
 
 
 def _draw_alert_list(draw: ImageDraw.ImageDraw, box: tuple[int, int, int, int], title: str, rows: Sequence[AlertRow], title_font, label_font, body_font) -> None:

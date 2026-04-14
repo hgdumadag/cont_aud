@@ -22,6 +22,11 @@
         <div class="full-span"><span>Download filename</span><strong>{{ board.meta.filename }}</strong></div>
     </div>
 
+    <figure class="visual-preview-frame">
+        <img class="visual-preview-image" src="{{ download_url }}" alt="{{ board.meta.board_title }} PNG preview">
+        <figcaption>Rendered PNG preview. The download button returns the same board at full resolution.</figcaption>
+    </figure>
+
     <section class="visual-kpi-grid">
         {% for tile in board.kpis %}
             <article class="visual-kpi visual-kpi-{{ tile.accent }}">
