@@ -524,6 +524,37 @@ def _truncate_text(draw: ImageDraw.ImageDraw, text: str, font, max_width: int) -
     return f'{trimmed}{ellipsis}' if trimmed else ellipsis
 
 
+def _wrap_label_two_lines(draw: ImageDraw.ImageDraw, text: str, font, max_width: int) -> list[str]:
+    text = (text or '').strip()
+    if not text:
+        return ['']
+    words = text.split()
+    if len(words) == 1:
+        return [words[0]]
+    best_split = None
+    best_diff = None
+    for index in range(1, len(words)):
+        first = ' '.join(words[:index])
+        second = ' '.join(words[index:])
+        if draw.textlength(first, font=font) <= max_width and draw.textlength(second, font=font) <= max_width:
+            diff = abs(draw.textlength(first, font=font) - draw.textlength(second, font=font))
+            if best_diff is None or diff < best_diff:
+                best_split = (first, second)
+                best_diff = diff
+    if best_split:
+        return [best_split[0], best_split[1]]
+    return _wrap_text(draw, text, font, max_width, max_lines=2)
+
+
+def _draw_label_two_lines(draw: ImageDraw.ImageDraw, x: int, y: int, text: str, font, fill: str, max_width: int) -> None:
+    lines = _wrap_label_two_lines(draw, text, font, max_width)
+    bbox = draw.textbbox((0, 0), 'Ag', font=font)
+    line_height = bbox[3] - bbox[1]
+    draw.text((x, y), lines[0], font=font, fill=fill)
+    if len(lines) > 1:
+        draw.text((x, y + line_height + 6), lines[1], font=font, fill=fill)
+
+
 def _draw_panel(draw: ImageDraw.ImageDraw, box: tuple[int, int, int, int], fill: str, outline: str, radius: int = 28) -> None:
     draw.rounded_rectangle(box, radius=radius, fill=fill, outline=outline, width=2)
 
@@ -583,13 +614,13 @@ def _draw_row_chart(
     _draw_panel(draw, box, PALETTE['panel'], PALETTE['line'])
     draw.text((x0 + 24, y0 + 20), title, font=title_font, fill=PALETTE['ink'])
     body_top = y0 + 78
-    row_height = 88 if rows and isinstance(rows[0], ComparisonRow) else 84
+    row_height = 112 if rows and isinstance(rows[0], ComparisonRow) else 102
     max_rows = max(1, int((y1 - body_top - 18) / row_height))
     for index, row in enumerate(rows[:max_rows]):
         row_y = body_top + index * row_height
         if isinstance(row, ComparisonRow):
-            draw.text((x0 + 24, row_y), _truncate_text(draw, row.label, label_font, 220), font=label_font, fill=PALETTE['ink'])
-            current_bar_x = x0 + 300
+            _draw_label_two_lines(draw, x0 + 24, row_y, row.label, label_font, PALETTE['ink'], 220)
+            current_bar_x = x0 + 320
             bar_width = x1 - current_bar_x - 170
             draw.rounded_rectangle((current_bar_x, row_y + 10, current_bar_x + bar_width, row_y + 30), radius=10, fill='#edf1f4')
             draw.rounded_rectangle((current_bar_x, row_y + 10, current_bar_x + int(bar_width * (row.current_width / 100)), row_y + 30), radius=10, fill=_accent_color(row.accent))
@@ -601,12 +632,12 @@ def _draw_row_chart(
             draw.text((x1 - 150, row_y - 2), current_text, font=body_font, fill=PALETTE['ink'])
             draw.text((x1 - 150, row_y + 30), previous_text, font=body_font, fill=PALETTE['muted'])
         else:
-            draw.text((x0 + 24, row_y), _truncate_text(draw, row.label, label_font, 220), font=label_font, fill=PALETTE['ink'])
+            _draw_label_two_lines(draw, x0 + 24, row_y, row.label, label_font, PALETTE['ink'], 220)
             draw.text((x1 - 116, row_y), row.share_label, font=body_font, fill=PALETTE['muted'])
             draw.text((x1 - 116, row_y + 30), _format_int(row.count), font=body_font, fill=PALETTE['ink'])
-            bar_width = x1 - (x0 + 300) - 130
-            draw.rounded_rectangle((x0 + 300, row_y + 10, x0 + 300 + bar_width, row_y + 30), radius=10, fill='#edf1f4')
-            draw.rounded_rectangle((x0 + 300, row_y + 10, x0 + 300 + int(bar_width * (row.current_width / 100)), row_y + 30), radius=10, fill=PALETTE['teal'])
+            bar_width = x1 - (x0 + 320) - 130
+            draw.rounded_rectangle((x0 + 320, row_y + 10, x0 + 320 + bar_width, row_y + 30), radius=10, fill='#edf1f4')
+            draw.rounded_rectangle((x0 + 320, row_y + 10, x0 + 320 + int(bar_width * (row.current_width / 100)), row_y + 30), radius=10, fill=PALETTE['teal'])
 
 
 def _draw_alert_list(draw: ImageDraw.ImageDraw, box: tuple[int, int, int, int], title: str, rows: Sequence[AlertRow], title_font, label_font, body_font) -> None:
@@ -620,12 +651,12 @@ def _draw_alert_list(draw: ImageDraw.ImageDraw, box: tuple[int, int, int, int], 
     for row in rows[:5]:
         label = row.title
         _draw_text_block(draw, x0 + 24, row_y, label, label_font, PALETTE['ink'], x1 - x0 - 280, max_lines=2)
-        detail_top = row_y + 36
-        _draw_text_block(draw, x0 + 24, detail_top, row.detail, body_font, PALETTE['muted'], x1 - x0 - 280, max_lines=3)
+        detail_top = row_y + 34
+        _draw_text_block(draw, x0 + 24, detail_top, row.detail, body_font, PALETTE['muted'], x1 - x0 - 280, max_lines=2)
         swatch = _accent_color('orange' if row.severity == FindingSeverity.WARNING else 'red')
         draw.rounded_rectangle((x1 - 174, row_y + 4, x1 - 24, row_y + 38), radius=10, fill=_accent_fill('orange' if row.severity == FindingSeverity.WARNING else 'red'))
         draw.text((x1 - 154, row_y + 8), row.severity, font=label_font, fill=swatch)
-        row_y += 108
+        row_y += 88
 
 
 def _draw_action_items(draw: ImageDraw.ImageDraw, box: tuple[int, int, int, int], title: str, items: Sequence[str], title_font, body_font) -> None:
@@ -684,7 +715,7 @@ def render_visual_board_png(board: SummaryBoardContext | EntityBoardContext) -> 
         _draw_row_chart(draw, (left_x, cards_top, left_x + card_width, cards_top + card_height), 'Comparison by entity', board.entity_rows, title_font, body_bold_font, body_font)
         _draw_row_chart(draw, (right_x, cards_top, right_x + card_width, cards_top + card_height), 'Top triggered controls', board.control_rows, title_font, body_bold_font, body_font, show_previous=False)
         lower_top = cards_top + card_height + GAP
-        lower_height = 426
+        lower_height = 540
         _draw_row_chart(draw, (left_x, lower_top, left_x + card_width, lower_top + lower_height), 'Severity mix', board.severity_rows, title_font, body_bold_font, body_font)
         _draw_alert_list(draw, (right_x, lower_top, right_x + card_width, lower_top + lower_height), 'DQ alerts', board.dq_rows, title_font, body_bold_font, body_font)
         footer_box = (MARGIN_X + 36, BOARD_HEIGHT - MARGIN_Y - 76, BOARD_WIDTH - MARGIN_X - 36, BOARD_HEIGHT - MARGIN_Y - 40)
@@ -693,7 +724,7 @@ def render_visual_board_png(board: SummaryBoardContext | EntityBoardContext) -> 
         _draw_row_chart(draw, (left_x, cards_top, left_x + card_width, cards_top + card_height), 'Severity mix', board.severity_rows, title_font, body_bold_font, body_font)
         _draw_row_chart(draw, (right_x, cards_top, right_x + card_width, cards_top + card_height), 'Top controls', board.control_rows, title_font, body_bold_font, body_font, show_previous=False)
         lower_top = cards_top + card_height + GAP
-        lower_height = 426
+        lower_height = 540
         _draw_row_chart(draw, (left_x, lower_top, left_x + card_width, lower_top + lower_height), 'Top exception themes', board.theme_rows, title_font, body_bold_font, body_font, show_previous=False)
         _draw_action_items(draw, (right_x, lower_top, right_x + card_width, lower_top + lower_height), 'Action items', board.action_items, title_font, body_font)
         footer_box = (MARGIN_X + 36, BOARD_HEIGHT - MARGIN_Y - 76, BOARD_WIDTH - MARGIN_X - 36, BOARD_HEIGHT - MARGIN_Y - 40)
