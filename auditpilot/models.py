@@ -18,6 +18,8 @@ class FindingSeverity(models.TextChoices):
 
 class RunStatusChoices(models.TextChoices):
     PENDING = 'PENDING', 'Pending'
+    QUEUED = 'QUEUED', 'Queued'
+    RUNNING = 'RUNNING', 'Running'
     COMPLETED = 'COMPLETED', 'Completed'
     FAILED_DQ = 'FAILED_DQ', 'Failed - Data Quality'
     FAILED_PROCESSING = 'FAILED_PROCESSING', 'Failed - Processing'

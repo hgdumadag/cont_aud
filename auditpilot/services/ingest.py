@@ -72,10 +72,14 @@ def store_uploaded_workbook(uploaded_file, as_of_label='', uploaded_by=''):
     return archive
 
 
-def load_workbook_payload(path):
-    workbook = load_workbook(path, read_only=True, data_only=True)
+def load_workbook_payload(path, progress_callback=None):
+    workbook = load_workbook(path, read_only=True, data_only=True, keep_links=False)
     payload = {}
     for worksheet in workbook.worksheets:
+        if worksheet.title not in SOURCE_SPECS:
+            continue
+        if progress_callback:
+            progress_callback(worksheet.title)
         spec = SOURCE_SPECS.get(worksheet.title, {})
         rows = worksheet.iter_rows(values_only=True)
         header_row_count = spec.get('header_rows', 1)
@@ -87,15 +91,8 @@ def load_workbook_payload(path):
             continue
         original_headers = _combine_header_rows(raw_header_rows)
         internal_headers = uniquify_headers(original_headers)
-        records = []
-        for row_number, row in enumerate(rows, start=header_row_count + 1):
-            values = list(row)
-            if len(values) < len(internal_headers):
-                values.extend([None] * (len(internal_headers) - len(values)))
-            record = {internal_headers[index]: values[index] for index in range(len(internal_headers))}
-            record['__source_row_number'] = row_number
-            records.append(record)
-        dataframe = pd.DataFrame(records)
+        dataframe = pd.DataFrame(rows, columns=internal_headers)
+        dataframe.insert(0, '__source_row_number', range(header_row_count + 1, header_row_count + 1 + len(dataframe)))
         payload[worksheet.title] = SheetPayload(
             sheet_name=worksheet.title,
             original_headers=original_headers,

@@ -2,6 +2,7 @@ import shutil
 import tempfile
 from io import BytesIO
 from types import SimpleNamespace
+from unittest.mock import patch
 
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import Client, TestCase, override_settings
@@ -316,6 +317,7 @@ class UtilityAndRuleTests(TestCase):
         self.assertEqual(placeholder_flag['triggered_by'], 'threshold')
 
 
+@override_settings(MEDIA_ROOT=tempfile.gettempdir(), AUDITPILOT_BACKGROUND_PROCESSING=False)
 class UploadFlowTests(TestCase):
     @classmethod
     def setUpClass(cls):
@@ -330,7 +332,6 @@ class UploadFlowTests(TestCase):
     def setUp(self):
         self.client = Client()
 
-    @override_settings(MEDIA_ROOT=tempfile.gettempdir())
     def test_upload_run_processes_workbook_and_exports_pack(self):
         workbook = SimpleUploadedFile('weekly.xlsx', build_workbook_bytes(), content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
         response = self.client.post(reverse('auditpilot:upload_run'), {'workbook': workbook, 'as_of_label': '2026-W10', 'uploaded_by': 'Analyst'})
@@ -390,7 +391,6 @@ class UploadFlowTests(TestCase):
         self.assertContains(placeholder_response, 'Finding scope')
         self.assertContains(placeholder_response, 'Sheet-level / column-level exception')
 
-    @override_settings(MEDIA_ROOT=tempfile.gettempdir())
     def test_visual_pack_switches_to_baseline_mode_after_second_completed_run(self):
         workbook_one = SimpleUploadedFile('weekly-a.xlsx', build_workbook_bytes(), content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
         self.client.post(reverse('auditpilot:upload_run'), {'workbook': workbook_one, 'as_of_label': '2026-W10', 'uploaded_by': 'Analyst'})
@@ -406,7 +406,6 @@ class UploadFlowTests(TestCase):
         self.assertEqual(entity_preview.status_code, 200)
         self.assertContains(entity_preview, 'vs previous run')
 
-    @override_settings(MEDIA_ROOT=tempfile.gettempdir())
     def test_missing_required_column_fails_dq_gate(self):
         workbook = SimpleUploadedFile('weekly-bad.xlsx', build_workbook_bytes(include_jgs_payment_document=False), content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
         response = self.client.post(reverse('auditpilot:upload_run'), {'workbook': workbook})
@@ -416,7 +415,6 @@ class UploadFlowTests(TestCase):
         self.assertEqual(run.normalized_records.count(), 0)
         self.assertEqual(run.exceptions.count(), 0)
 
-    @override_settings(MEDIA_ROOT=tempfile.gettempdir())
     def test_same_workbook_hash_reproduces_same_counts_when_reprocessed_cleanly(self):
         payload = build_workbook_bytes()
         workbook_one = SimpleUploadedFile('same.xlsx', payload, content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
@@ -436,4 +434,20 @@ class UploadFlowTests(TestCase):
 
         self.assertEqual(first_hash, second_hash)
         self.assertEqual(first_counts, second_counts)
+
+    @override_settings(MEDIA_ROOT=tempfile.gettempdir(), AUDITPILOT_BACKGROUND_PROCESSING=True)
+    @patch('auditpilot.services.pipeline.submit_audit_run_processing')
+    def test_upload_run_submits_background_job_without_waiting(self, submit_mock):
+        workbook = SimpleUploadedFile('weekly-async.xlsx', build_workbook_bytes(), content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+        response = self.client.post(reverse('auditpilot:upload_run'), {'workbook': workbook, 'as_of_label': '2026-W12', 'uploaded_by': 'Analyst'})
+        self.assertEqual(response.status_code, 302)
+        run = AuditRun.objects.get()
+        self.assertEqual(run.status, 'QUEUED')
+        self.assertEqual(run.processing_stage, 'Queued')
+        self.assertEqual(run.overall_message, 'Run submitted and waiting to start.')
+        submit_mock.assert_called_once_with(run.id)
+        detail_response = self.client.get(reverse('auditpilot:run_detail', args=[run.id]))
+        self.assertEqual(detail_response.status_code, 200)
+        self.assertContains(detail_response, 'Visual outputs will be available when processing completes.')
+        self.assertContains(detail_response, 'run-live-state')
 

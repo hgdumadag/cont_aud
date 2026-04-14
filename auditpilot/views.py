@@ -1,12 +1,14 @@
 from django.contrib import messages
+from django.conf import settings
 from django.db.models import Count
 from django.http import Http404
+from django.http import JsonResponse
 from django.http import HttpResponse
 from django.urls import reverse
 from django.shortcuts import get_object_or_404, redirect, render
 
 from .forms import ControlCatalogForm, ExceptionUpdateForm, UploadWorkbookForm
-from .models import AuditRun, ControlCatalog, DQFinding, ExceptionEvent, ExceptionRecord, ExceptionStatusChoices, SeverityChoices
+from .models import AuditRun, ControlCatalog, DQFinding, ExceptionEvent, ExceptionRecord, ExceptionStatusChoices, RunStatusChoices, SeverityChoices
 from .services.constants import SOURCE_SPECS
 from .services.exports import build_weekly_pack
 from .services.ingest import uniquify_headers
@@ -20,6 +22,12 @@ OPEN_EXCEPTION_STATUSES = [
     ExceptionStatusChoices.VALIDATED,
     ExceptionStatusChoices.IN_PROGRESS,
 ]
+
+TERMINAL_RUN_STATUSES = {
+    RunStatusChoices.COMPLETED,
+    RunStatusChoices.FAILED_DQ,
+    RunStatusChoices.FAILED_PROCESSING,
+}
 
 CANONICAL_DETAIL_FIELDS = [
     ('source_row_number', 'Source row number'),
@@ -165,6 +173,9 @@ def upload_run(request):
                 as_of_label=form.cleaned_data['as_of_label'],
                 uploaded_by=form.cleaned_data['uploaded_by'],
             )
+            if getattr(settings, 'AUDITPILOT_BACKGROUND_PROCESSING', True):
+                messages.success(request, f'Run {run.id} submitted. Processing in the background.')
+                return redirect('auditpilot:run_detail', run_id=run.id)
             if run.status == 'FAILED_DQ':
                 messages.warning(request, 'Workbook ingested but failed the data quality gate.')
             elif run.status == 'FAILED_PROCESSING':
@@ -182,7 +193,8 @@ def run_detail(request, run_id):
         AuditRun.objects.select_related('source_file').prefetch_related('sheet_runs', 'dq_findings', 'control_executions__control', 'exceptions__control'),
         pk=run_id,
     )
-    visual_pack = build_weekly_visual_pack_context(run)
+    run_is_terminal = run.status in TERMINAL_RUN_STATUSES
+    visual_pack = build_weekly_visual_pack_context(run) if run_is_terminal else None
     exceptions = run.exceptions.select_related('control').order_by('-opened_at')[:30]
     dq_findings = run.dq_findings.select_related('sheet_run')
     return render(
@@ -190,10 +202,30 @@ def run_detail(request, run_id):
         'auditpilot/run_detail.html',
         {
             'run': run,
+            'run_is_terminal': run_is_terminal,
             'exceptions': exceptions,
             'dq_findings': dq_findings,
             'visual_pack': visual_pack,
         },
+    )
+
+
+def run_status(request, run_id):
+    run = get_object_or_404(AuditRun, pk=run_id)
+    return JsonResponse(
+        {
+            'id': run.id,
+            'status': run.status,
+            'status_label': run.get_status_display(),
+            'processing_stage': run.processing_stage or '',
+            'overall_message': run.overall_message or '',
+            'total_rows': run.total_rows,
+            'total_exceptions': run.total_exceptions,
+            'total_warnings': run.total_warnings,
+            'total_errors': run.total_errors,
+            'completed_at': run.completed_at.isoformat() if run.completed_at else None,
+            'is_terminal': run.status in TERMINAL_RUN_STATUSES,
+        }
     )
 
 

@@ -1,19 +1,19 @@
 ﻿{% extends "base.html" %}
 {% block title %}Run {{ run.id }} | Continuous Auditing Pilot{% endblock %}
 {% block content %}
-<section class="card-grid metrics-grid">
-    <article class="metric-card accent-teal"><span>Status</span><strong>{{ run.get_status_display }}</strong></article>
-    <article class="metric-card accent-slate"><span>Stage</span><strong>{{ run.processing_stage|default:"-" }}</strong></article>
-    <article class="metric-card accent-orange"><span>Rows</span><strong>{{ run.total_rows }}</strong></article>
-    <article class="metric-card accent-slate"><span>Exceptions</span><strong>{{ run.total_exceptions }}</strong></article>
-    <article class="metric-card accent-gold"><span>Warnings</span><strong>{{ run.total_warnings }}</strong></article>
+<section class="card-grid metrics-grid" id="run-live-state" data-status-url="{% url 'auditpilot:run_status' run.id %}" data-terminal="{{ run_is_terminal|yesno:'1,0' }}">
+    <article class="metric-card accent-teal"><span>Status</span><strong id="run-status-value">{{ run.get_status_display }}</strong></article>
+    <article class="metric-card accent-slate"><span>Stage</span><strong id="run-stage-value">{{ run.processing_stage|default:"-" }}</strong></article>
+    <article class="metric-card accent-orange"><span>Rows</span><strong id="run-rows-value">{{ run.total_rows }}</strong></article>
+    <article class="metric-card accent-slate"><span>Exceptions</span><strong id="run-exceptions-value">{{ run.total_exceptions }}</strong></article>
+    <article class="metric-card accent-gold"><span>Warnings</span><strong id="run-warnings-value">{{ run.total_warnings }}</strong></article>
 </section>
 
 <section class="card">
     <div class="section-header">
         <div>
             <h2>Run {{ run.id }}</h2>
-            <p>{{ run.overall_message }}</p>
+            <p id="run-message">{{ run.overall_message }}</p>
         </div>
         <a class="button primary" href="{% url 'auditpilot:export_run_pack' run.id %}">Export weekly pack</a>
     </div>
@@ -31,35 +31,41 @@
             <h2>Visual Pack</h2>
             <p>Presentation-quality findings boards in HTML and PNG form.</p>
         </div>
-        <div class="visual-inline-note">
-            <strong>{% if visual_pack.summary.meta.baseline_available %}vs previous run{% else %}current run only{% endif %}</strong>
-            <span>{{ visual_pack.summary.meta.baseline_label }}</span>
-        </div>
+        {% if run_is_terminal and visual_pack %}
+            <div class="visual-inline-note">
+                <strong>{% if visual_pack.summary.meta.baseline_available %}vs previous run{% else %}current run only{% endif %}</strong>
+                <span>{{ visual_pack.summary.meta.baseline_label }}</span>
+            </div>
+        {% endif %}
     </div>
-    <div class="visual-link-grid">
-        <article class="visual-link-card">
-            <div>
-                <h3>Portfolio summary</h3>
-                <p>Open backlog, intake, closures, severity mix, and top controls.</p>
-            </div>
-            <div class="visual-link-actions">
-                <a class="button ghost" href="{% url 'auditpilot:visual_summary' run.id %}">Preview</a>
-                <a class="button primary" href="{% url 'auditpilot:visual_summary_png' run.id %}">Download PNG</a>
-            </div>
-        </article>
-        {% for entity_name, entity_board in visual_pack.entities.items %}
+    {% if run_is_terminal and visual_pack %}
+        <div class="visual-link-grid">
             <article class="visual-link-card">
                 <div>
-                    <h3>{{ entity_name }} board</h3>
-                    <p>Entity-specific backlog, control triggers, DQ warnings, and themes.</p>
+                    <h3>Portfolio summary</h3>
+                    <p>Open backlog, intake, closures, severity mix, and top controls.</p>
                 </div>
                 <div class="visual-link-actions">
-                    <a class="button ghost" href="{% url 'auditpilot:visual_entity' run.id entity_name %}">Preview</a>
-                    <a class="button primary" href="{% url 'auditpilot:visual_entity_png' run.id entity_name %}">Download PNG</a>
+                    <a class="button ghost" href="{% url 'auditpilot:visual_summary' run.id %}">Preview</a>
+                    <a class="button primary" href="{% url 'auditpilot:visual_summary_png' run.id %}">Download PNG</a>
                 </div>
             </article>
-        {% endfor %}
-    </div>
+            {% for entity_name, entity_board in visual_pack.entities.items %}
+                <article class="visual-link-card">
+                    <div>
+                        <h3>{{ entity_name }} board</h3>
+                        <p>Entity-specific backlog, control triggers, DQ warnings, and themes.</p>
+                    </div>
+                    <div class="visual-link-actions">
+                        <a class="button ghost" href="{% url 'auditpilot:visual_entity' run.id entity_name %}">Preview</a>
+                        <a class="button primary" href="{% url 'auditpilot:visual_entity_png' run.id entity_name %}">Download PNG</a>
+                    </div>
+                </article>
+            {% endfor %}
+        </div>
+    {% else %}
+        <p class="empty-state">Visual outputs will be available when processing completes.</p>
+    {% endif %}
 </section>
 
 <section class="panel two-column">
@@ -137,4 +143,56 @@
         </table>
     </div>
 </section>
+<script>
+(function() {
+    const container = document.getElementById('run-live-state');
+    if (!container || container.dataset.terminal === '1') {
+        return;
+    }
+    const statusUrl = container.dataset.statusUrl;
+    const statusEl = document.getElementById('run-status-value');
+    const stageEl = document.getElementById('run-stage-value');
+    const rowsEl = document.getElementById('run-rows-value');
+    const exceptionsEl = document.getElementById('run-exceptions-value');
+    const warningsEl = document.getElementById('run-warnings-value');
+    const messageEl = document.getElementById('run-message');
+    let reloaded = false;
+
+    const numberFormatter = new Intl.NumberFormat();
+
+    function setText(element, value) {
+        if (element) {
+            element.textContent = value;
+        }
+    }
+
+    async function pollStatus() {
+        try {
+            const response = await fetch(statusUrl, {headers: {'X-Requested-With': 'XMLHttpRequest'}});
+            if (!response.ok) {
+                return;
+            }
+            const data = await response.json();
+            setText(statusEl, data.status_label || '-');
+            setText(stageEl, data.processing_stage || '-');
+            setText(rowsEl, numberFormatter.format(data.total_rows || 0));
+            setText(exceptionsEl, numberFormatter.format(data.total_exceptions || 0));
+            setText(warningsEl, numberFormatter.format(data.total_warnings || 0));
+            setText(messageEl, data.overall_message || '');
+            if (data.is_terminal && !reloaded) {
+                reloaded = true;
+                window.location.reload();
+            }
+        } catch (error) {
+            // Keep polling; the run may still be processing even if one request fails.
+        }
+    }
+
+    pollStatus();
+    const timer = window.setInterval(pollStatus, 4000);
+    window.addEventListener('beforeunload', function() {
+        window.clearInterval(timer);
+    });
+})();
+</script>
 {% endblock %}

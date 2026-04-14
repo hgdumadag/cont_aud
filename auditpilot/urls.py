@@ -8,6 +8,7 @@ urlpatterns = [
     path('', views.dashboard, name='dashboard'),
     path('runs/upload/', views.upload_run, name='upload_run'),
     path('runs/<int:run_id>/', views.run_detail, name='run_detail'),
+    path('runs/<int:run_id>/status/', views.run_status, name='run_status'),
     path('runs/<int:run_id>/export/', views.export_run_pack, name='export_run_pack'),
     path('runs/<int:run_id>/visual/', views.visual_summary, name='visual_summary'),
     path('runs/<int:run_id>/visual.png', views.visual_summary_png, name='visual_summary_png'),
