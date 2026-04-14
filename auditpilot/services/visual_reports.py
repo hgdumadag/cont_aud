@@ -194,9 +194,14 @@ def _value_width(value: int, maximum: int) -> int:
     return max(4, int(round((value / maximum) * 100))) if value else 0
 
 
-def _comparison_rows(current_rows: Counter, previous_rows: Counter | None, label_prefix: str = '') -> list[ComparisonRow]:
+def _comparison_rows(current_rows: Counter, previous_rows: Counter | None, label_prefix: str = '', limit: int | None = None) -> list[ComparisonRow]:
     previous_rows = previous_rows or Counter()
-    labels = sorted(set(current_rows) | set(previous_rows))
+    labels = sorted(
+        set(current_rows) | set(previous_rows),
+        key=lambda label: (-int(current_rows.get(label, 0)), -int(previous_rows.get(label, 0) if previous_rows else 0), str(label)),
+    )
+    if limit is not None:
+        labels = labels[:limit]
     maximum = max(
         max(current_rows.values(), default=0),
         max(previous_rows.values(), default=0),
@@ -394,12 +399,12 @@ def build_weekly_visual_pack_context(run: AuditRun) -> WeeklyVisualPackContext:
             KpiTile('High/Critical open', _format_int(high_critical_open), 'Priority queue', 'red'),
             KpiTile('DQ warnings', _format_int(dq_warning_count), 'Current run', 'orange'),
         ],
-        entity_rows=_comparison_rows(current_entity_counts, baseline_entity_counts, ''),
-        severity_rows=_comparison_rows(current_severity_counts, baseline_severity_counts, ''),
-        control_rows=_comparison_rows(current_control_counts, baseline_control_counts, ''),
-        disposition_rows=_comparison_rows(current_disposition_counts, baseline_disposition_counts, ''),
+        entity_rows=_comparison_rows(current_entity_counts, baseline_entity_counts, '', limit=5),
+        severity_rows=_comparison_rows(current_severity_counts, baseline_severity_counts, '', limit=5),
+        control_rows=_comparison_rows(current_control_counts, baseline_control_counts, '', limit=5),
+        disposition_rows=_comparison_rows(current_disposition_counts, baseline_disposition_counts, '', limit=5),
         dq_rows=_dq_alert_rows(warning_dq_findings),
-        theme_rows=_theme_rows(current_title_counts),
+        theme_rows=_theme_rows(current_title_counts, limit=5),
         action_items=_build_action_items(baseline_run, open_count, high_critical_open, dq_warning_count, _top_controls(current_exceptions)),
     )
 
@@ -433,11 +438,11 @@ def build_weekly_visual_pack_context(run: AuditRun) -> WeeklyVisualPackContext:
                 KpiTile('High/Critical open', _format_int(high_critical_entity), 'Priority queue', 'red'),
                 KpiTile('DQ warnings', _format_int(dq_entity_count), 'Current sheet alerts', 'orange'),
             ],
-            severity_rows=_comparison_rows(current_entity_severity_counts, baseline_entity_severity_counts, ''),
-            control_rows=_comparison_rows(current_entity_control_counts, baseline_entity_control_counts, ''),
-            theme_rows=_theme_rows(current_entity_title_counts),
-            dq_rows=_dq_alert_rows(warning_entity_dq),
-            recent_exceptions=_recent_exceptions(current_entity_exceptions),
+            severity_rows=_comparison_rows(current_entity_severity_counts, baseline_entity_severity_counts, '', limit=5),
+            control_rows=_comparison_rows(current_entity_control_counts, baseline_entity_control_counts, '', limit=5),
+            theme_rows=_theme_rows(current_entity_title_counts, limit=4),
+            dq_rows=_dq_alert_rows(warning_entity_dq, limit=5),
+            recent_exceptions=_recent_exceptions(current_entity_exceptions, limit=5),
             action_items=_build_action_items(baseline_run, len(current_entity_open), high_critical_entity, dq_entity_count, entity_controls, entity_label=entity),
         )
 
@@ -529,30 +534,52 @@ def _wrap_label_two_lines(draw: ImageDraw.ImageDraw, text: str, font, max_width:
     if not text:
         return ['']
     words = text.split()
-    if len(words) == 1:
-        return [words[0]]
     best_split = None
     best_diff = None
-    for index in range(1, len(words)):
-        first = ' '.join(words[:index])
-        second = ' '.join(words[index:])
-        if draw.textlength(first, font=font) <= max_width and draw.textlength(second, font=font) <= max_width:
-            diff = abs(draw.textlength(first, font=font) - draw.textlength(second, font=font))
-            if best_diff is None or diff < best_diff:
-                best_split = (first, second)
-                best_diff = diff
+    if len(words) > 1:
+        for index in range(1, len(words)):
+            first = ' '.join(words[:index])
+            second = ' '.join(words[index:])
+            if draw.textlength(first, font=font) <= max_width and draw.textlength(second, font=font) <= max_width:
+                diff = abs(draw.textlength(first, font=font) - draw.textlength(second, font=font))
+                if best_diff is None or diff < best_diff:
+                    best_split = (first, second)
+                    best_diff = diff
     if best_split:
         return [best_split[0], best_split[1]]
+    delimiters = ['-', '_', '/']
+    for delimiter in delimiters:
+        parts = [part for part in text.split(delimiter) if part]
+        if len(parts) < 2:
+            continue
+        best_split = None
+        best_diff = None
+        for index in range(1, len(parts)):
+            first = delimiter.join(parts[:index])
+            second = delimiter.join(parts[index:])
+            if draw.textlength(first, font=font) <= max_width and draw.textlength(second, font=font) <= max_width:
+                diff = abs(draw.textlength(first, font=font) - draw.textlength(second, font=font))
+                if best_diff is None or diff < best_diff:
+                    best_split = (first, second)
+                    best_diff = diff
+        if best_split:
+            return [best_split[0], best_split[1]]
+    if '-' in text:
+        parts = [part for part in text.split('-') if part]
+        if len(parts) >= 2:
+            midpoint = max(1, len(parts) // 2)
+            return ['-'.join(parts[:midpoint]), '-'.join(parts[midpoint:])]
     return _wrap_text(draw, text, font, max_width, max_lines=2)
 
 
-def _draw_label_two_lines(draw: ImageDraw.ImageDraw, x: int, y: int, text: str, font, fill: str, max_width: int) -> None:
+def _draw_label_two_lines(draw: ImageDraw.ImageDraw, x: int, y: int, text: str, font, fill: str, max_width: int) -> int:
     lines = _wrap_label_two_lines(draw, text, font, max_width)
     bbox = draw.textbbox((0, 0), 'Ag', font=font)
     line_height = bbox[3] - bbox[1]
     draw.text((x, y), lines[0], font=font, fill=fill)
     if len(lines) > 1:
         draw.text((x, y + line_height + 6), lines[1], font=font, fill=fill)
+    return line_height * len(lines) + (6 if len(lines) > 1 else 0)
 
 
 def _draw_panel(draw: ImageDraw.ImageDraw, box: tuple[int, int, int, int], fill: str, outline: str, radius: int = 28) -> None:
@@ -614,30 +641,33 @@ def _draw_row_chart(
     _draw_panel(draw, box, PALETTE['panel'], PALETTE['line'])
     draw.text((x0 + 24, y0 + 20), title, font=title_font, fill=PALETTE['ink'])
     body_top = y0 + 78
-    row_height = 112 if rows and isinstance(rows[0], ComparisonRow) else 102
+    row_height = 110 if rows and isinstance(rows[0], ComparisonRow) else 82
     max_rows = max(1, int((y1 - body_top - 18) / row_height))
     for index, row in enumerate(rows[:max_rows]):
         row_y = body_top + index * row_height
         if isinstance(row, ComparisonRow):
-            _draw_label_two_lines(draw, x0 + 24, row_y, row.label, label_font, PALETTE['ink'], 220)
-            current_bar_x = x0 + 320
+            label_height = _draw_label_two_lines(draw, x0 + 24, row_y, row.label, label_font, PALETTE['ink'], 280)
+            bar_y = row_y + label_height + 10
+            current_bar_x = x0 + 24
             bar_width = x1 - current_bar_x - 170
-            draw.rounded_rectangle((current_bar_x, row_y + 10, current_bar_x + bar_width, row_y + 30), radius=10, fill='#edf1f4')
-            draw.rounded_rectangle((current_bar_x, row_y + 10, current_bar_x + int(bar_width * (row.current_width / 100)), row_y + 30), radius=10, fill=_accent_color(row.accent))
+            draw.rounded_rectangle((current_bar_x, bar_y, current_bar_x + bar_width, bar_y + 16), radius=8, fill='#edf1f4')
+            draw.rounded_rectangle((current_bar_x, bar_y, current_bar_x + int(bar_width * (row.current_width / 100)), bar_y + 16), radius=8, fill=_accent_color(row.accent))
             if show_previous and row.baseline_available:
-                draw.rounded_rectangle((current_bar_x, row_y + 38, current_bar_x + bar_width, row_y + 58), radius=10, fill='#edf1f4')
-                draw.rounded_rectangle((current_bar_x, row_y + 38, current_bar_x + int(bar_width * (row.previous_width / 100)), row_y + 58), radius=10, fill=PALETTE['gold'])
+                prev_y = bar_y + 24
+                draw.rounded_rectangle((current_bar_x, prev_y, current_bar_x + bar_width, prev_y + 16), radius=8, fill='#edf1f4')
+                draw.rounded_rectangle((current_bar_x, prev_y, current_bar_x + int(bar_width * (row.previous_width / 100)), prev_y + 16), radius=8, fill=PALETTE['gold'])
             current_text = row.current_label
             previous_text = row.previous_label if row.baseline_available else 'No baseline'
-            draw.text((x1 - 150, row_y - 2), current_text, font=body_font, fill=PALETTE['ink'])
-            draw.text((x1 - 150, row_y + 30), previous_text, font=body_font, fill=PALETTE['muted'])
+            draw.text((x1 - 150, bar_y - 2), current_text, font=body_font, fill=PALETTE['ink'])
+            draw.text((x1 - 150, bar_y + 24 - 2), previous_text, font=body_font, fill=PALETTE['muted'])
         else:
-            _draw_label_two_lines(draw, x0 + 24, row_y, row.label, label_font, PALETTE['ink'], 220)
+            label_height = _draw_label_two_lines(draw, x0 + 24, row_y, row.label, label_font, PALETTE['ink'], 280)
+            bar_y = row_y + label_height + 10
             draw.text((x1 - 116, row_y), row.share_label, font=body_font, fill=PALETTE['muted'])
-            draw.text((x1 - 116, row_y + 30), _format_int(row.count), font=body_font, fill=PALETTE['ink'])
-            bar_width = x1 - (x0 + 320) - 130
-            draw.rounded_rectangle((x0 + 320, row_y + 10, x0 + 320 + bar_width, row_y + 30), radius=10, fill='#edf1f4')
-            draw.rounded_rectangle((x0 + 320, row_y + 10, x0 + 320 + int(bar_width * (row.current_width / 100)), row_y + 30), radius=10, fill=PALETTE['teal'])
+            draw.text((x1 - 116, bar_y - 2), _format_int(row.count), font=body_font, fill=PALETTE['ink'])
+            bar_width = x1 - (x0 + 24) - 130
+            draw.rounded_rectangle((x0 + 24, bar_y, x0 + 24 + bar_width, bar_y + 16), radius=8, fill='#edf1f4')
+            draw.rounded_rectangle((x0 + 24, bar_y, x0 + 24 + int(bar_width * (row.current_width / 100)), bar_y + 16), radius=8, fill=PALETTE['teal'])
 
 
 def _draw_alert_list(draw: ImageDraw.ImageDraw, box: tuple[int, int, int, int], title: str, rows: Sequence[AlertRow], title_font, label_font, body_font) -> None:
@@ -651,12 +681,12 @@ def _draw_alert_list(draw: ImageDraw.ImageDraw, box: tuple[int, int, int, int], 
     for row in rows[:5]:
         label = row.title
         _draw_text_block(draw, x0 + 24, row_y, label, label_font, PALETTE['ink'], x1 - x0 - 280, max_lines=2)
-        detail_top = row_y + 34
+        detail_top = row_y + 30
         _draw_text_block(draw, x0 + 24, detail_top, row.detail, body_font, PALETTE['muted'], x1 - x0 - 280, max_lines=2)
         swatch = _accent_color('orange' if row.severity == FindingSeverity.WARNING else 'red')
-        draw.rounded_rectangle((x1 - 174, row_y + 4, x1 - 24, row_y + 38), radius=10, fill=_accent_fill('orange' if row.severity == FindingSeverity.WARNING else 'red'))
-        draw.text((x1 - 154, row_y + 8), row.severity, font=label_font, fill=swatch)
-        row_y += 88
+        draw.rounded_rectangle((x1 - 174, row_y + 2, x1 - 24, row_y + 34), radius=10, fill=_accent_fill('orange' if row.severity == FindingSeverity.WARNING else 'red'))
+        draw.text((x1 - 154, row_y + 6), row.severity, font=label_font, fill=swatch)
+        row_y += 70
 
 
 def _draw_action_items(draw: ImageDraw.ImageDraw, box: tuple[int, int, int, int], title: str, items: Sequence[str], title_font, body_font) -> None:
@@ -706,7 +736,7 @@ def render_visual_board_png(board: SummaryBoardContext | EntityBoardContext) -> 
     content_top = MARGIN_Y + 212
     kpi_height = _draw_kpi_tiles(draw, MARGIN_X + 14, content_top, BOARD_WIDTH - 2 * MARGIN_X - 28, board.kpis, kpi_title_font, kpi_value_font, body_font)
     cards_top = content_top + kpi_height + 34
-    card_height = 566
+    card_height = 670
     card_width = (BOARD_WIDTH - 2 * MARGIN_X - GAP) // 2
     left_x = MARGIN_X
     right_x = left_x + card_width + GAP
@@ -715,7 +745,7 @@ def render_visual_board_png(board: SummaryBoardContext | EntityBoardContext) -> 
         _draw_row_chart(draw, (left_x, cards_top, left_x + card_width, cards_top + card_height), 'Comparison by entity', board.entity_rows, title_font, body_bold_font, body_font)
         _draw_row_chart(draw, (right_x, cards_top, right_x + card_width, cards_top + card_height), 'Top triggered controls', board.control_rows, title_font, body_bold_font, body_font, show_previous=False)
         lower_top = cards_top + card_height + GAP
-        lower_height = 540
+        lower_height = 430
         _draw_row_chart(draw, (left_x, lower_top, left_x + card_width, lower_top + lower_height), 'Severity mix', board.severity_rows, title_font, body_bold_font, body_font)
         _draw_alert_list(draw, (right_x, lower_top, right_x + card_width, lower_top + lower_height), 'DQ alerts', board.dq_rows, title_font, body_bold_font, body_font)
         footer_box = (MARGIN_X + 36, BOARD_HEIGHT - MARGIN_Y - 76, BOARD_WIDTH - MARGIN_X - 36, BOARD_HEIGHT - MARGIN_Y - 40)
@@ -724,7 +754,7 @@ def render_visual_board_png(board: SummaryBoardContext | EntityBoardContext) -> 
         _draw_row_chart(draw, (left_x, cards_top, left_x + card_width, cards_top + card_height), 'Severity mix', board.severity_rows, title_font, body_bold_font, body_font)
         _draw_row_chart(draw, (right_x, cards_top, right_x + card_width, cards_top + card_height), 'Top controls', board.control_rows, title_font, body_bold_font, body_font, show_previous=False)
         lower_top = cards_top + card_height + GAP
-        lower_height = 540
+        lower_height = 430
         _draw_row_chart(draw, (left_x, lower_top, left_x + card_width, lower_top + lower_height), 'Top exception themes', board.theme_rows, title_font, body_bold_font, body_font, show_previous=False)
         _draw_action_items(draw, (right_x, lower_top, right_x + card_width, lower_top + lower_height), 'Action items', board.action_items, title_font, body_font)
         footer_box = (MARGIN_X + 36, BOARD_HEIGHT - MARGIN_Y - 76, BOARD_WIDTH - MARGIN_X - 36, BOARD_HEIGHT - MARGIN_Y - 40)

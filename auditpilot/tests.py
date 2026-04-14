@@ -131,6 +131,33 @@ def build_workbook_bytes(include_jgs_payment_document=True):
     }
     jgs_sheet.append(build_row(jgs_headers, jgs_row))
 
+    for sheet_name, company_code, vendor_code, payment_document, amount, bank_reference in [
+        ('RLC', '4200', '7001', 'RLC-PD-001', '1800', 'RLC-BANK-001'),
+        ('CEB', '4300', '8001', 'CEB-PD-001', '2200', 'CEB-BANK-001'),
+        ('RRHI', '4400', '9001', 'RRHI-PD-001', '2600', 'RRHI-BANK-001'),
+    ]:
+        sheet = workbook.create_sheet(sheet_name)
+        headers = list(SOURCE_SPECS[sheet_name]['header_sequence'])
+        sheet.append(headers)
+        row = dict(jgs_row)
+        row.update(
+            {
+                'Company Code': company_code,
+                'Company Name': f'{sheet_name} Business Unit',
+                'Vendor Code': vendor_code,
+                'Vendor Name': f'Vendor {sheet_name}',
+                'SAP Document Number': f'{sheet_name}-SAP-001',
+                'Payment Document': payment_document,
+                'Bank Reference': bank_reference,
+                'Amount in Local Curr': amount,
+                'Status': 'Open',
+                'Status Description': f'{sheet_name} pending treasury',
+                'Process Group': 'Services',
+                'Nature of Transaction': 'IT',
+            }
+        )
+        sheet.append(build_row(headers, row))
+
     output = BytesIO()
     workbook.save(output)
     return output.getvalue()
@@ -240,8 +267,8 @@ class UploadFlowTests(TestCase):
         run = AuditRun.objects.get()
         self.assertEqual(run.status, 'COMPLETED')
         self.assertEqual(run.as_of_label, '2026-W10')
-        self.assertEqual(run.sheet_runs.count(), 2)
-        self.assertEqual(run.normalized_records.count(), 3)
+        self.assertEqual(run.sheet_runs.count(), 5)
+        self.assertEqual(run.normalized_records.count(), 6)
         self.assertGreater(run.exceptions.count(), 0)
         export_response = self.client.get(reverse('auditpilot:export_run_pack', args=[run.id]))
         self.assertEqual(export_response.status_code, 200)
@@ -251,6 +278,9 @@ class UploadFlowTests(TestCase):
         self.assertEqual(detail_response.status_code, 200)
         self.assertContains(detail_response, 'Recent exceptions')
         self.assertContains(detail_response, 'Visual Pack')
+        self.assertContains(detail_response, 'RLC board')
+        self.assertContains(detail_response, 'CEB board')
+        self.assertContains(detail_response, 'RRHI board')
         summary_preview = self.client.get(reverse('auditpilot:visual_summary', args=[run.id]))
         self.assertEqual(summary_preview.status_code, 200)
         self.assertContains(summary_preview, 'No previous completed run')

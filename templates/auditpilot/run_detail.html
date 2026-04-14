@@ -46,26 +46,18 @@
                 <a class="button primary" href="{% url 'auditpilot:visual_summary_png' run.id %}">Download PNG</a>
             </div>
         </article>
-        <article class="visual-link-card">
-            <div>
-                <h3>SOC board</h3>
-                <p>Entity-specific backlog, control triggers, DQ warnings, and themes.</p>
-            </div>
-            <div class="visual-link-actions">
-                <a class="button ghost" href="{% url 'auditpilot:visual_entity' run.id 'SOC' %}">Preview</a>
-                <a class="button primary" href="{% url 'auditpilot:visual_entity_png' run.id 'SOC' %}">Download PNG</a>
-            </div>
-        </article>
-        <article class="visual-link-card">
-            <div>
-                <h3>JGS board</h3>
-                <p>Entity-specific backlog, control triggers, DQ warnings, and themes.</p>
-            </div>
-            <div class="visual-link-actions">
-                <a class="button ghost" href="{% url 'auditpilot:visual_entity' run.id 'JGS' %}">Preview</a>
-                <a class="button primary" href="{% url 'auditpilot:visual_entity_png' run.id 'JGS' %}">Download PNG</a>
-            </div>
-        </article>
+        {% for entity_name, entity_board in visual_pack.entities.items %}
+            <article class="visual-link-card">
+                <div>
+                    <h3>{{ entity_name }} board</h3>
+                    <p>Entity-specific backlog, control triggers, DQ warnings, and themes.</p>
+                </div>
+                <div class="visual-link-actions">
+                    <a class="button ghost" href="{% url 'auditpilot:visual_entity' run.id entity_name %}">Preview</a>
+                    <a class="button primary" href="{% url 'auditpilot:visual_entity_png' run.id entity_name %}">Download PNG</a>
+                </div>
+            </article>
+        {% endfor %}
     </div>
 </section>
 
