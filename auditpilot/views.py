@@ -1,6 +1,7 @@
 from django.contrib import messages
 from django.conf import settings
 from django.db.models import Count
+from django.db.utils import OperationalError
 from django.http import Http404
 from django.http import JsonResponse
 from django.http import HttpResponse
@@ -211,7 +212,22 @@ def run_detail(request, run_id):
 
 
 def run_status(request, run_id):
-    run = get_object_or_404(AuditRun, pk=run_id)
+    try:
+        run = AuditRun.objects.only(
+            'id',
+            'status',
+            'processing_stage',
+            'overall_message',
+            'total_rows',
+            'total_exceptions',
+            'total_warnings',
+            'total_errors',
+            'completed_at',
+        ).get(pk=run_id)
+    except OperationalError:
+        return JsonResponse({'busy': True, 'status': 'RUNNING', 'status_label': 'Running', 'is_terminal': False}, status=503)
+    except AuditRun.DoesNotExist:
+        raise Http404('Run not found')
     return JsonResponse(
         {
             'id': run.id,
