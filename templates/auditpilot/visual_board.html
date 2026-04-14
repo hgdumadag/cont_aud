@@ -1,0 +1,272 @@
+{% extends "base.html" %}
+{% block title %}{{ board.meta.board_title }} | Continuous Auditing Pilot{% endblock %}
+{% block content %}
+<section class="card visual-page-shell">
+    <div class="section-header">
+        <div>
+            <p class="eyebrow">Visual findings export</p>
+            <h2>{{ board.meta.board_title }}</h2>
+            <p class="visual-lead">{{ board.meta.subtitle }} · {{ board.meta.scope_label }} · {{ board.meta.run_label }}</p>
+        </div>
+        <div class="visual-actions">
+            <a class="button primary" href="{{ download_url }}">Download PNG</a>
+            <a class="button ghost" href="{{ back_url }}">Back to run</a>
+        </div>
+    </div>
+
+    <div class="meta-grid visual-meta-grid">
+        <div><span>Run</span><strong>{{ board.meta.run_label }}</strong></div>
+        <div><span>As of</span><strong>{{ board.meta.as_of_label }}</strong></div>
+        <div><span>Baseline</span><strong>{{ board.meta.baseline_label }}</strong></div>
+        <div><span>Generated</span><strong>{{ board.meta.generated_at }}</strong></div>
+        <div class="full-span"><span>Download filename</span><strong>{{ board.meta.filename }}</strong></div>
+    </div>
+
+    <section class="visual-kpi-grid">
+        {% for tile in board.kpis %}
+            <article class="visual-kpi visual-kpi-{{ tile.accent }}">
+                <span>{{ tile.label }}</span>
+                <strong>{{ tile.value }}</strong>
+                {% if tile.sublabel %}<p>{{ tile.sublabel }}</p>{% endif %}
+            </article>
+        {% endfor %}
+    </section>
+
+    {% if board.meta.baseline_available %}
+        <div class="visual-notice">vs previous run · {{ board.meta.baseline_label }}</div>
+    {% else %}
+        <div class="visual-notice">current run only · No previous completed run is available.</div>
+    {% endif %}
+
+    <section class="visual-grid two-column">
+        <article class="visual-panel">
+            <div class="visual-panel-header">
+                <h3>Comparison by entity</h3>
+                <p>Current vs previous completed run</p>
+            </div>
+            <div class="visual-bar-list">
+                {% for row in board.entity_rows %}
+                    <div class="visual-bar-card">
+                        <div class="visual-bar-head">
+                            <strong>{{ row.label }}</strong>
+                            <span>{{ row.delta_label }}</span>
+                        </div>
+                        <div class="visual-bar-row">
+                            <span>Current</span>
+                            <div class="visual-track"><div class="visual-fill accent-{{ row.accent }}" style="width: {{ row.current_width }}%"></div></div>
+                            <strong>{{ row.current_label }}</strong>
+                        </div>
+                        <div class="visual-bar-row">
+                            <span>Previous</span>
+                            <div class="visual-track muted"><div class="visual-fill accent-gold" style="width: {{ row.previous_width }}%"></div></div>
+                            <strong>{{ row.previous_label }}</strong>
+                        </div>
+                    </div>
+                {% empty %}
+                    <p class="empty-state">No entity comparison data.</p>
+                {% endfor %}
+            </div>
+        </article>
+
+        <article class="visual-panel">
+            <div class="visual-panel-header">
+                <h3>Severity mix</h3>
+                <p>Current vs baseline by severity band</p>
+            </div>
+            <div class="visual-bar-list">
+                {% for row in board.severity_rows %}
+                    <div class="visual-bar-card">
+                        <div class="visual-bar-head">
+                            <strong>{{ row.label }}</strong>
+                            <span>{{ row.delta_label }}</span>
+                        </div>
+                        <div class="visual-bar-row">
+                            <span>Current</span>
+                            <div class="visual-track"><div class="visual-fill accent-{{ row.accent }}" style="width: {{ row.current_width }}%"></div></div>
+                            <strong>{{ row.current_label }}</strong>
+                        </div>
+                        <div class="visual-bar-row">
+                            <span>Previous</span>
+                            <div class="visual-track muted"><div class="visual-fill accent-gold" style="width: {{ row.previous_width }}%"></div></div>
+                            <strong>{{ row.previous_label }}</strong>
+                        </div>
+                    </div>
+                {% empty %}
+                    <p class="empty-state">No severity comparison data.</p>
+                {% endfor %}
+            </div>
+        </article>
+    </section>
+
+    <section class="visual-grid two-column">
+        <article class="visual-panel">
+            <div class="visual-panel-header">
+                <h3>Top triggered controls</h3>
+                <p>Current vs baseline counts</p>
+            </div>
+            <div class="visual-bar-list">
+                {% for row in board.control_rows %}
+                    <div class="visual-bar-card">
+                        <div class="visual-bar-head">
+                            <strong>{{ row.label }}</strong>
+                            <span>{{ row.delta_label }}</span>
+                        </div>
+                        <div class="visual-bar-row">
+                            <span>Current</span>
+                            <div class="visual-track"><div class="visual-fill accent-{{ row.accent }}" style="width: {{ row.current_width }}%"></div></div>
+                            <strong>{{ row.current_label }}</strong>
+                        </div>
+                        <div class="visual-bar-row">
+                            <span>Previous</span>
+                            <div class="visual-track muted"><div class="visual-fill accent-gold" style="width: {{ row.previous_width }}%"></div></div>
+                            <strong>{{ row.previous_label }}</strong>
+                        </div>
+                    </div>
+                {% empty %}
+                    <p class="empty-state">No control counts yet.</p>
+                {% endfor %}
+            </div>
+        </article>
+
+        <article class="visual-panel">
+            <div class="visual-panel-header">
+                <h3>Disposition mix</h3>
+                <p>Current vs baseline by disposition</p>
+            </div>
+            <div class="visual-bar-list">
+                {% for row in board.disposition_rows %}
+                    <div class="visual-bar-card">
+                        <div class="visual-bar-head">
+                            <strong>{{ row.label }}</strong>
+                            <span>{{ row.delta_label }}</span>
+                        </div>
+                        <div class="visual-bar-row">
+                            <span>Current</span>
+                            <div class="visual-track"><div class="visual-fill accent-{{ row.accent }}" style="width: {{ row.current_width }}%"></div></div>
+                            <strong>{{ row.current_label }}</strong>
+                        </div>
+                        <div class="visual-bar-row">
+                            <span>Previous</span>
+                            <div class="visual-track muted"><div class="visual-fill accent-gold" style="width: {{ row.previous_width }}%"></div></div>
+                            <strong>{{ row.previous_label }}</strong>
+                        </div>
+                    </div>
+                {% empty %}
+                    <p class="empty-state">No disposition data yet.</p>
+                {% endfor %}
+            </div>
+        </article>
+    </section>
+
+    <section class="visual-grid two-column">
+        <article class="visual-panel">
+            <div class="visual-panel-header">
+                <h3>Top exception themes</h3>
+                <p>Current run headline patterns</p>
+            </div>
+            <div class="visual-theme-list">
+                {% for row in board.theme_rows %}
+                    <div class="visual-theme-row">
+                        <div class="visual-theme-copy">
+                            <strong>{{ row.label }}</strong>
+                            <span>{{ row.share_label }}</span>
+                        </div>
+                        <div class="visual-track"><div class="visual-fill accent-teal" style="width: {{ row.current_width }}%"></div></div>
+                        <strong>{{ row.count }}</strong>
+                    </div>
+                {% empty %}
+                    <p class="empty-state">No exception themes available.</p>
+                {% endfor %}
+            </div>
+        </article>
+
+        <article class="visual-panel">
+            <div class="visual-panel-header">
+                <h3>Action items</h3>
+                <p>What should be reviewed next</p>
+            </div>
+            <ul class="visual-bullets">
+                {% for item in board.action_items %}
+                    <li>{{ item }}</li>
+                {% empty %}
+                    <li>No action items generated.</li>
+                {% endfor %}
+            </ul>
+        </article>
+    </section>
+
+    {% if board.board_type == 'summary' %}
+        <section class="visual-grid two-column">
+            <article class="visual-panel">
+                <div class="visual-panel-header">
+                    <h3>DQ alerts</h3>
+                    <p>Warnings generated during the current run</p>
+                </div>
+                <div class="visual-alert-list">
+                    {% for row in board.dq_rows %}
+                        <article class="visual-alert-card">
+                            <div>
+                                <strong>{{ row.title }}</strong>
+                                <p>{{ row.detail }}</p>
+                            </div>
+                            <span>{{ row.severity }}</span>
+                        </article>
+                    {% empty %}
+                        <p class="empty-state">No DQ warnings.</p>
+                    {% endfor %}
+                </div>
+            </article>
+            <article class="visual-panel">
+                <div class="visual-panel-header">
+                    <h3>Board mode</h3>
+                    <p>Comparison contract for this export</p>
+                </div>
+                <div class="visual-callout">
+                    <strong>{% if board.meta.baseline_available %}vs previous run{% else %}current run only{% endif %}</strong>
+                    <p>{% if board.meta.baseline_available %}The board compares the current run against {{ board.meta.baseline_label }}.{% else %}This is the first completed run in the current sequence, so all comparison tiles use absolute values only.{% endif %}</p>
+                </div>
+            </article>
+        </section>
+    {% else %}
+        <section class="visual-grid two-column">
+            <article class="visual-panel">
+                <div class="visual-panel-header">
+                    <h3>DQ alerts</h3>
+                    <p>Sheet alerts for {{ board.entity }}</p>
+                </div>
+                <div class="visual-alert-list">
+                    {% for row in board.dq_rows %}
+                        <article class="visual-alert-card">
+                            <div>
+                                <strong>{{ row.title }}</strong>
+                                <p>{{ row.detail }}</p>
+                            </div>
+                            <span>{{ row.severity }}</span>
+                        </article>
+                    {% empty %}
+                        <p class="empty-state">No DQ warnings for {{ board.entity }}.</p>
+                    {% endfor %}
+                </div>
+            </article>
+            <article class="visual-panel">
+                <div class="visual-panel-header">
+                    <h3>Recent exceptions</h3>
+                    <p>Latest findings for {{ board.entity }}</p>
+                </div>
+                <div class="visual-alert-list">
+                    {% for row in board.recent_exceptions %}
+                        <article class="visual-alert-card">
+                            <div>
+                                <strong>{{ row.label }}</strong>
+                                <p>{{ row.share_label }}</p>
+                            </div>
+                        </article>
+                    {% empty %}
+                        <p class="empty-state">No recent exceptions for {{ board.entity }}.</p>
+                    {% endfor %}
+                </div>
+            </article>
+        </section>
+    {% endif %}
+</section>
+{% endblock %}

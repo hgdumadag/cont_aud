@@ -1,6 +1,8 @@
 from django.contrib import messages
 from django.db.models import Count
+from django.http import Http404
 from django.http import HttpResponse
+from django.urls import reverse
 from django.shortcuts import get_object_or_404, redirect, render
 
 from .forms import ControlCatalogForm, ExceptionUpdateForm, UploadWorkbookForm
@@ -9,6 +11,7 @@ from .services.constants import SOURCE_SPECS
 from .services.exports import build_weekly_pack
 from .services.ingest import uniquify_headers
 from .services.pipeline import process_uploaded_workbook
+from .services.visual_reports import build_weekly_visual_pack_context, get_board_context, render_visual_board_png
 
 
 OPEN_EXCEPTION_STATUSES = [
@@ -173,9 +176,19 @@ def run_detail(request, run_id):
         AuditRun.objects.select_related('source_file').prefetch_related('sheet_runs', 'dq_findings', 'control_executions__control', 'exceptions__control'),
         pk=run_id,
     )
+    visual_pack = build_weekly_visual_pack_context(run)
     exceptions = run.exceptions.select_related('control').order_by('-opened_at')[:30]
     dq_findings = run.dq_findings.select_related('sheet_run')
-    return render(request, 'auditpilot/run_detail.html', {'run': run, 'exceptions': exceptions, 'dq_findings': dq_findings})
+    return render(
+        request,
+        'auditpilot/run_detail.html',
+        {
+            'run': run,
+            'exceptions': exceptions,
+            'dq_findings': dq_findings,
+            'visual_pack': visual_pack,
+        },
+    )
 
 
 def exception_list(request):
@@ -278,4 +291,55 @@ def export_run_pack(request, run_id):
     workbook = build_weekly_pack(run)
     response = HttpResponse(workbook, content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
     response['Content-Disposition'] = f'attachment; filename=weekly-pack-run-{run.id}.xlsx'
+    return response
+
+
+def _visual_board_response(request, run_id, entity=None):
+    run = get_object_or_404(AuditRun.objects.select_related('source_file'), pk=run_id)
+    visual_pack = build_weekly_visual_pack_context(run)
+    board = get_board_context(visual_pack, entity)
+    download_view = 'auditpilot:visual_summary_png' if entity is None else 'auditpilot:visual_entity_png'
+    preview_view = 'auditpilot:visual_summary' if entity is None else 'auditpilot:visual_entity'
+    context = {
+        'run': run,
+        'visual_pack': visual_pack,
+        'board': board,
+        'board_type': 'summary' if entity is None else 'entity',
+        'entity': entity,
+        'download_url': reverse(download_view, args=[run.id] if entity is None else [run.id, entity]),
+        'back_url': reverse('auditpilot:run_detail', args=[run.id]),
+        'preview_url': reverse(preview_view, args=[run.id] if entity is None else [run.id, entity]),
+    }
+    return context
+
+
+def visual_summary(request, run_id):
+    context = _visual_board_response(request, run_id)
+    return render(request, 'auditpilot/visual_board.html', context)
+
+
+def visual_summary_png(request, run_id):
+    run = get_object_or_404(AuditRun.objects.select_related('source_file'), pk=run_id)
+    board = get_board_context(build_weekly_visual_pack_context(run), None)
+    png = render_visual_board_png(board)
+    response = HttpResponse(png, content_type='image/png')
+    response['Content-Disposition'] = f'attachment; filename=weekly-visual-summary-run-{run.id}.png'
+    return response
+
+
+def visual_entity(request, run_id, entity):
+    if entity not in SOURCE_SPECS:
+        raise Http404('Unknown entity')
+    context = _visual_board_response(request, run_id, entity)
+    return render(request, 'auditpilot/visual_board.html', context)
+
+
+def visual_entity_png(request, run_id, entity):
+    if entity not in SOURCE_SPECS:
+        raise Http404('Unknown entity')
+    run = get_object_or_404(AuditRun.objects.select_related('source_file'), pk=run_id)
+    board = get_board_context(build_weekly_visual_pack_context(run), entity)
+    png = render_visual_board_png(board)
+    response = HttpResponse(png, content_type='image/png')
+    response['Content-Disposition'] = f'attachment; filename=weekly-visual-{entity.lower()}-run-{run.id}.png'
     return response

@@ -24,6 +24,51 @@
     </div>
 </section>
 
+<section class="card">
+    <div class="section-header">
+        <div>
+            <h2>Visual Pack</h2>
+            <p>Presentation-quality findings boards in HTML and PNG form.</p>
+        </div>
+        <div class="visual-inline-note">
+            <strong>{% if visual_pack.summary.meta.baseline_available %}vs previous run{% else %}current run only{% endif %}</strong>
+            <span>{{ visual_pack.summary.meta.baseline_label }}</span>
+        </div>
+    </div>
+    <div class="visual-link-grid">
+        <article class="visual-link-card">
+            <div>
+                <h3>Portfolio summary</h3>
+                <p>Open backlog, intake, closures, severity mix, and top controls.</p>
+            </div>
+            <div class="visual-link-actions">
+                <a class="button ghost" href="{% url 'auditpilot:visual_summary' run.id %}">Preview</a>
+                <a class="button primary" href="{% url 'auditpilot:visual_summary_png' run.id %}">Download PNG</a>
+            </div>
+        </article>
+        <article class="visual-link-card">
+            <div>
+                <h3>SOC board</h3>
+                <p>Entity-specific backlog, control triggers, DQ warnings, and themes.</p>
+            </div>
+            <div class="visual-link-actions">
+                <a class="button ghost" href="{% url 'auditpilot:visual_entity' run.id 'SOC' %}">Preview</a>
+                <a class="button primary" href="{% url 'auditpilot:visual_entity_png' run.id 'SOC' %}">Download PNG</a>
+            </div>
+        </article>
+        <article class="visual-link-card">
+            <div>
+                <h3>JGS board</h3>
+                <p>Entity-specific backlog, control triggers, DQ warnings, and themes.</p>
+            </div>
+            <div class="visual-link-actions">
+                <a class="button ghost" href="{% url 'auditpilot:visual_entity' run.id 'JGS' %}">Preview</a>
+                <a class="button primary" href="{% url 'auditpilot:visual_entity_png' run.id 'JGS' %}">Download PNG</a>
+            </div>
+        </article>
+    </div>
+</section>
+
 <section class="panel two-column">
     <article class="card">
         <h2>Sheet results</h2>
